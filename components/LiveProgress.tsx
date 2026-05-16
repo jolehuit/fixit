@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useReducer, useRef, useState } from 'react';
+import type { Chapter } from '@/components/ChapterPlayer';
 import type {
   AnalyzeResult,
   ClarifyAnswer,
@@ -27,6 +28,7 @@ type LiveState = {
   plan: RepairPlan | null;
   stepsProgress: Record<number, StepProgress>;
   finalUrl: string | null;
+  chaptersReady: boolean;
   error: string | null;
   done: boolean;
 };
@@ -42,6 +44,7 @@ const initialState = (): LiveState => ({
   plan: null,
   stepsProgress: {},
   finalUrl: null,
+  chaptersReady: false,
   error: null,
   done: false,
 });
@@ -98,6 +101,8 @@ function reducer(state: LiveState, action: Action): LiveState {
     }
     case 'stitch_done':
       return { ...state, finalUrl: ev.video_url };
+    case 'chapters_ready':
+      return { ...state, chaptersReady: true };
     case 'error':
       return { ...state, error: ev.message, done: true };
     case 'done':
@@ -139,12 +144,16 @@ export function LiveProgress({
   jobId,
   onAnalyze,
   onVideoReady,
+  onChaptersReady,
   onOpenVideo,
 }: {
   jobId: string;
   /** Receives the AnalyzeResult as soon as it arrives (used by the parent to draw the marker). */
   onAnalyze?: (a: AnalyzeResult) => void;
+  /** Legacy single-video output (cached demo path). */
   onVideoReady?: (url: string) => void;
+  /** Live path: per-step interactive chapter player input. */
+  onChaptersReady?: (chapters: Chapter[]) => void;
   onOpenVideo?: () => void;
 }) {
   const [state, dispatch] = useReducer(reducer, undefined, initialState);
@@ -153,6 +162,10 @@ export function LiveProgress({
   onAnalyzeRef.current = onAnalyze;
   const onVideoReadyRef = useRef(onVideoReady);
   onVideoReadyRef.current = onVideoReady;
+  const onChaptersReadyRef = useRef(onChaptersReady);
+  onChaptersReadyRef.current = onChaptersReady;
+  // Guard so we only fire onChaptersReady once per job (when all clips are in).
+  const chaptersFiredRef = useRef(false);
 
   // ---- SSE subscription ----
   useEffect(() => {
@@ -175,6 +188,31 @@ export function LiveProgress({
     };
     return () => es.close();
   }, [jobId]);
+
+  // Once chapters_ready fired AND every step has both video + audio URLs,
+  // hand the assembled chapter list to the parent so it can open the player.
+  useEffect(() => {
+    if (chaptersFiredRef.current) return;
+    if (!state.chaptersReady || !state.plan) return;
+    const chapters: Chapter[] = [];
+    for (const step of state.plan.steps) {
+      const p = state.stepsProgress[step.step_number];
+      if (!p?.animationUrl || !p?.narrationUrl) return;
+      chapters.push({
+        step_number: step.step_number,
+        title: step.title,
+        subtitle: step.subtitle ?? step.title,
+        description: step.description,
+        video_url: p.animationUrl,
+        audio_url: p.narrationUrl,
+        safety_note: step.safety_note,
+        success_criteria: step.success_criteria,
+        common_mistake: step.common_mistake,
+      });
+    }
+    chaptersFiredRef.current = true;
+    onChaptersReadyRef.current?.(chapters);
+  }, [state.chaptersReady, state.plan, state.stepsProgress]);
 
   // ---- Auto-scroll on new content ----
   // biome-ignore lint/correctness/useExhaustiveDependencies: scroll follows state changes
@@ -238,14 +276,15 @@ export function LiveProgress({
         {/* 3. Repair plan + step progress */}
         {state.plan ? <PlanCard plan={state.plan} progress={state.stepsProgress} /> : null}
 
-        {/* Final CTA — opens the video */}
-        {state.finalUrl ? (
+        {/* Final CTA — opens the chapter player (live) or the legacy video (cached). */}
+        {state.chaptersReady || state.finalUrl ? (
           <button
             type="button"
             onClick={onOpenVideo}
             className="mt-2 inline-flex w-fit items-center gap-2 self-start rounded-md bg-[color:var(--color-accent)] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[color:var(--color-accent-hover)]"
           >
-            <PlayIcon /> Watch the repair video
+            <PlayIcon />
+            {state.chaptersReady ? 'Start interactive tutorial' : 'Watch the repair video'}
           </button>
         ) : null}
 

@@ -23,7 +23,6 @@ import {
   type RepairStep,
   RunRequest,
   RunResponse,
-  type StitchClip,
 } from '@/lib/types';
 
 /** How long the orchestrator pauses on clarify_needed for user answers. */
@@ -255,7 +254,7 @@ async function runLive(jobId: string, input: { photo_url: string; transcript?: s
       transient: true,
     });
 
-    async function processStep(step: RepairStep): Promise<StitchClip> {
+    async function processStep(step: RepairStep): Promise<void> {
       const i = step.step_number;
 
       // Keyframe start — pass scene_lock + per-step focus/shot for consistent visuals.
@@ -315,19 +314,11 @@ async function runLive(jobId: string, input: { photo_url: string; transcript?: s
 
       emit(jobId, { type: 'animation_done', step: i, url: anim.url });
       emit(jobId, { type: 'narration_done', step: i, url: narr.url });
-
-      return {
-        step_number: i,
-        video_url: anim.url,
-        audio_url: narr.url,
-        // Prefer the short subtitle when provided; fallback to full narration.
-        subtitle: step.subtitle ?? step.narration,
-      };
     }
 
     // Étape 1 seule d'abord (mesure de latence)
     const t0 = Date.now();
-    const clip1 = await processStep(repairPlan.steps[0]);
+    await processStep(repairPlan.steps[0]);
 
     // Downgrade qualité si keyframe > 25s
     if (Date.now() - t0 > 25_000) {
@@ -339,25 +330,15 @@ async function runLive(jobId: string, input: { photo_url: string; transcript?: s
     }
 
     // Étapes restantes en parallèle
-    const remainingClips = await Promise.all(repairPlan.steps.slice(1).map(processStep));
-    const clips: StitchClip[] = [clip1, ...remainingClips];
+    await Promise.all(repairPlan.steps.slice(1).map(processStep));
 
-    // ── 5. Stitch ──────────────────────────────────────────────────────────
+    // ── 5. Chapter player ─────────────────────────────────────────────────
+    // No more ffmpeg stitch — the frontend assembles a chapter-style player
+    // from the per-step animation_done + narration_done URLs already streamed.
+    emit(jobId, { type: 'chapters_ready' });
     emit(jobId, {
       type: 'log',
-      message: '⠋ Montage ffmpeg · concat + narration + sous-titres FR…',
-      transient: true,
-    });
-
-    const finalVideo = await post<{ url: string; duration_seconds: number }>('/api/stitch', {
-      clips,
-      intro_text: repairPlan.problem_summary,
-    });
-
-    emit(jobId, { type: 'stitch_done', video_url: finalVideo.url });
-    emit(jobId, {
-      type: 'log',
-      message: `✓ Vidéo finale prête · ${Math.round(finalVideo.duration_seconds)} s · 720p · narration FR + sous-titres`,
+      message: `✓ ${repairPlan.steps.length} chapters ready · loop-on-step interactive tutorial`,
     });
     emit(jobId, { type: 'done' });
   } catch (err) {

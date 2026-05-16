@@ -3,6 +3,8 @@
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Suspense, use, useState } from 'react';
+import type { Chapter } from '@/components/ChapterPlayer';
+import { ChapterPlayerModal } from '@/components/ChapterPlayerModal';
 import { LiveProgress } from '@/components/LiveProgress';
 import { VideoModal } from '@/components/VideoModal';
 import { demos } from '@/lib/demos';
@@ -19,6 +21,7 @@ function JobInner({ jobId }: { jobId: string }) {
 
   const [imageFailed, setImageFailed] = useState(false);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [chapters, setChapters] = useState<Chapter[] | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [analyzeMarker, setAnalyzeMarker] = useState<DefectMarker | null>(null);
 
@@ -30,7 +33,7 @@ function JobInner({ jobId }: { jobId: string }) {
   // the streaming endpoint — no client-side storage quota to worry about.
   // Demo fallback only kicks in if the server can't serve the photo.
   const imgSrc = imageFailed ? (demo?.photo_url ?? null) : `/api/jobs/${jobId}/photo`;
-  const ready = Boolean(videoUrl);
+  const ready = Boolean(videoUrl) || Boolean(chapters);
   const headline = demo ? demo.title : 'Diagnosing your repair';
   const metaLine = demo ? demo.category : 'Live pipeline · Your photo';
 
@@ -73,7 +76,11 @@ function JobInner({ jobId }: { jobId: string }) {
               <button
                 type="button"
                 onClick={() => setModalOpen(true)}
-                aria-label={`Watch repair video: ${marker.label}`}
+                aria-label={
+                  chapters
+                    ? `Start interactive tutorial: ${marker.label}`
+                    : `Watch repair video: ${marker.label}`
+                }
                 className="group absolute -translate-x-1/2 -translate-y-1/2 cursor-pointer animate-[fade-in_400ms_ease-out]"
                 style={{ left: `${marker.x}%`, top: `${marker.y}%` }}
               >
@@ -96,14 +103,16 @@ function JobInner({ jobId }: { jobId: string }) {
                   </svg>
                 </span>
                 <span className="pointer-events-none absolute left-1/2 top-full mt-3 -translate-x-1/2 whitespace-nowrap rounded-md bg-[color:var(--color-marker-strong)] px-2.5 py-1 text-xs font-semibold text-white opacity-0 shadow-md transition group-hover:opacity-100">
-                  {marker.label} · tap to watch
+                  {marker.label} · {chapters ? 'tap to start tutorial' : 'tap to watch'}
                 </span>
               </button>
             ) : null}
           </div>
           <p className="text-sm text-[color:var(--color-muted)]">
             {ready && marker
-              ? `${marker.label} located. Tap the marker to play the repair video.`
+              ? chapters
+                ? `${marker.label} located. Tap the marker to start the step-by-step tutorial.`
+                : `${marker.label} located. Tap the marker to play the repair video.`
               : 'Your photo feeds the full live pipeline. Each stage appears on the right as it completes.'}
           </p>
         </aside>
@@ -113,12 +122,19 @@ function JobInner({ jobId }: { jobId: string }) {
             jobId={jobId}
             onAnalyze={onAnalyze}
             onVideoReady={setVideoUrl}
+            onChaptersReady={setChapters}
             onOpenVideo={() => setModalOpen(true)}
           />
         </section>
       </div>
 
-      {modalOpen && videoUrl ? (
+      {modalOpen && chapters ? (
+        <ChapterPlayerModal
+          chapters={chapters}
+          title={marker ? `Interactive repair · ${marker.label}` : 'Interactive repair tutorial'}
+          onClose={() => setModalOpen(false)}
+        />
+      ) : modalOpen && videoUrl ? (
         <VideoModal
           url={videoUrl}
           title={marker ? `Repair · ${marker.label}` : 'Your repair video'}

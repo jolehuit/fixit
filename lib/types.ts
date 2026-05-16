@@ -365,6 +365,11 @@ export const StreamEvent = z.discriminatedUnion('type', [
     url: z.string().url(),
   }),
   z.object({ type: z.literal('stitch_done'), video_url: z.string().url() }),
+  // Live path: per-step clips are ready. The frontend has each step's
+  // video + audio from animation_done + narration_done, and the plan from
+  // plan_done — this is just the "you can open the chapter player now"
+  // signal. No payload because the data already lives in the buffer.
+  z.object({ type: z.literal('chapters_ready') }),
   // operational signals
   z.object({ type: z.literal('info'), message: z.string() }),
   z.object({ type: z.literal('error'), message: z.string() }),
