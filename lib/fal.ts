@@ -18,6 +18,6 @@ if (env.FAL_KEY) {
 
 /** Endpoint IDs (single source of truth — swap here, nowhere else). */
 export const FAL_IMAGE_EDIT_ENDPOINT = 'openai/gpt-image-2/edit';
-export const FAL_VIDEO_I2V_ENDPOINT = 'bytedance/seedance-2.0/image-to-video';
+export const FAL_VIDEO_I2V_ENDPOINT = 'bytedance/seedance-2.0/fast/image-to-video';
 
 export { fal };

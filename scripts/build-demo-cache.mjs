@@ -58,14 +58,30 @@ const photoPath = resolve(getFlag('--photo', KNOWN_DEMOS[demoId]));
 const sourceDir = resolve(`scripts/demo-sources/${demoId}`);
 const resumePath = getFlag('--resume', null);
 const progressPath = getFlag('--progress-out', `/tmp/fixit-progress-${demoId}.json`);
+const keyframesOnly = args.includes('--keyframes-only');
+const forceRegen = args.includes('--force-regen');
+// Optional `--steps 2,4,6` filter: only process these step numbers, skip the
+// rest. Useful for parallel partial runs (e.g. regenerate broken keyframes
+// for some steps while the others animate+narrate in another invocation).
+const stepsArg = getFlag('--steps', null);
+const stepsFilter = stepsArg
+  ? new Set(
+      stepsArg
+        .split(',')
+        .map((s) => parseInt(s.trim(), 10))
+        .filter((n) => Number.isInteger(n) && n > 0),
+    )
+  : null;
 
 // ---------- env (only required for real runs; --dry skips the API entirely) ----------
-const FAL_KEY = process.env.FAL_KEY;
+// `--fal-key` overrides the env. Lets you launch N invocations in parallel,
+// each using a different fal account so you don't hit per-key rate limits.
+const FAL_KEY = getFlag('--fal-key', null) || process.env.FAL_KEY;
 const BLOB_TOKEN = process.env.BLOB_READ_WRITE_TOKEN;
 const IS_DRY = args.includes('--dry');
 if (!IS_DRY) {
   if (!FAL_KEY) {
-    console.error('FAL_KEY missing. Use --env-file=.env.local.');
+    console.error('FAL_KEY missing. Use --env-file=.env.local or pass --fal-key.');
     process.exit(1);
   }
   if (!BLOB_TOKEN) {
@@ -73,6 +89,113 @@ if (!IS_DRY) {
     process.exit(1);
   }
   fal.config({ credentials: FAL_KEY });
+}
+
+// ---------- fal endpoint constants (kept in sync with lib/fal.ts) ----------
+const FAL_IMAGE_EDIT_ENDPOINT = 'openai/gpt-image-2/edit';
+const FAL_VIDEO_I2V_ENDPOINT = 'bytedance/seedance-2.0/fast/image-to-video';
+
+// ---------- direct prompt builders (copied from /api/render-keyframe + /api/animate-step) ----------
+function wrapWithSceneLock(prompt, scene_lock, subject_focus, shot_type) {
+  if (!scene_lock) return prompt;
+  const parts = [];
+  parts.push(`Subject: ${scene_lock.subject}.`);
+  const finalShot = shot_type ?? scene_lock.shot_default;
+  parts.push(`Shot: ${finalShot}, ${scene_lock.style}.`);
+  parts.push(`Environment: ${scene_lock.environment}.`);
+  parts.push(`Hands: ${scene_lock.hands_style}.`);
+  parts.push(`Color palette: ${scene_lock.color_palette}.`);
+  if (subject_focus) parts.push(`Focus on: ${subject_focus}.`);
+  parts.push(`Scene action: ${prompt}.`);
+  if (scene_lock.consistency_phrases.length > 0) {
+    parts.push(`${scene_lock.consistency_phrases.map((p) => p.replace(/\.$/, '')).join('; ')}.`);
+  }
+  if (scene_lock.negative_cues.length > 0) {
+    parts.push(`Avoid: ${scene_lock.negative_cues.join(', ')}.`);
+  }
+  return parts.join(' ');
+}
+
+const PACING_HINTS = {
+  slow_methodical: 'Movements are slow, methodical, and unhurried.',
+  controlled: 'Movements are controlled and steady.',
+  deliberate: 'Movements are deliberate but confident.',
+};
+
+function buildSceneWrapper(motion, motionPacing, cameraMovement) {
+  const cameraDirective =
+    !cameraMovement || cameraMovement === 'static'
+      ? 'Camera fixed in place — no pan, no zoom, no cuts, no scene change.'
+      : `Camera applies only a ${cameraMovement.replace(/_/g, ' ')} — no other movement, no cuts, no scene change.`;
+  const lines = [
+    cameraDirective,
+    'Same scene, same framing, same lighting from start to end. Preserve composition and colors of the reference frame.',
+    'The only thing that moves is the action described next.',
+    `Action: ${motion}`,
+    'The object being repaired, the hands, and the tools remain consistent with the first frame — never multiply, morph, or disappear.',
+  ];
+  if (motionPacing) lines.push(PACING_HINTS[motionPacing]);
+  return lines.join(' ');
+}
+
+const BASE_NEGATIVE_CUES = [
+  'camera pan',
+  'camera zoom',
+  'camera shake',
+  'scene change',
+  'cut',
+  'transition',
+  'extra hands',
+  'extra fingers',
+  'duplicated tools',
+  'morphing object',
+  'disappearing tool',
+  'new object appearing',
+  'background change',
+  'text overlay',
+  'subtitles',
+  'watermark',
+  'blurry',
+  'low quality',
+  'distorted',
+];
+
+function buildNegativePrompt(extraCues) {
+  const merged = new Set(BASE_NEGATIVE_CUES);
+  if (extraCues) for (const cue of extraCues) merged.add(cue);
+  return Array.from(merged).join(', ');
+}
+
+async function callFalImageEdit(input) {
+  let lastErr;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const r = await fal.subscribe(FAL_IMAGE_EDIT_ENDPOINT, { input, logs: false });
+      const url = r?.data?.images?.[0]?.url;
+      if (!url) throw new Error('fal returned no image url');
+      return url;
+    } catch (err) {
+      lastErr = err;
+      if (attempt < 2) continue;
+    }
+  }
+  throw new Error(`fal image-edit failed after 2 attempts: ${lastErr?.message ?? lastErr}`);
+}
+
+async function callFalImageToVideo(input) {
+  let lastErr;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const r = await fal.subscribe(FAL_VIDEO_I2V_ENDPOINT, { input, logs: false });
+      const url = r?.data?.video?.url;
+      if (!url) throw new Error('fal returned no video url');
+      return url;
+    } catch (err) {
+      lastErr = err;
+      if (attempt < 2) continue;
+    }
+  }
+  throw new Error(`fal i2v failed after 2 attempts: ${lastErr?.message ?? lastErr}`);
 }
 
 // ---------- helpers ----------
@@ -238,10 +361,14 @@ async function probeDevServer() {
   let prevStartKeyframe;
   for (const step of plan.steps) {
     const stepStart = Date.now();
+    if (stepsFilter && !stepsFilter.has(step.step_number)) {
+      log(`step ${step.step_number}/${plan.steps.length}: SKIPPED by --steps filter`);
+      continue;
+    }
     log(`step ${step.step_number}/${plan.steps.length}: ${step.title}`);
 
     const cached = findResumeStep(step.step_number);
-    const isComplete = cached?.video_url && cached?.audio_url;
+    const isComplete = !forceRegen && cached?.video_url && cached?.audio_url;
 
     if (isComplete) {
       log(`  ↻ resuming — already complete, reusing URLs`);
@@ -259,64 +386,79 @@ async function probeDevServer() {
       continue;
     }
 
-    // 1. Start keyframe (reuse from resume if present)
-    let kfStartUrl = cached?.keyframe_start_url;
+    // 1. Start keyframe (reuse from resume if present, unless --force-regen)
+    let kfStartUrl = forceRegen ? undefined : cached?.keyframe_start_url;
     if (kfStartUrl) {
       log(`  ↻ render-keyframe start (reused): ${kfStartUrl}`);
     } else {
-      log(`  → render-keyframe start…`);
-      const kfStart = await post('/api/render-keyframe', {
-        step_number: step.step_number,
-        kind: 'start',
-        reference_url: photoUrl,
-        prev_keyframe_url: prevStartKeyframe,
-        prompt: step.visual_prompt_start,
+      log(`  → render-keyframe start (direct fal)…`);
+      const startPrompt = wrapWithSceneLock(
+        step.visual_prompt_start,
+        plan.scene_lock,
+        step.subject_focus,
+        step.shot_type,
+      );
+      kfStartUrl = await callFalImageEdit({
+        prompt: startPrompt,
+        image_urls: prevStartKeyframe ? [photoUrl, prevStartKeyframe] : [photoUrl],
         quality: 'high',
         image_size: 'landscape_16_9',
-        scene_lock: plan.scene_lock,
-        subject_focus: step.subject_focus,
-        shot_type: step.shot_type,
       });
-      kfStartUrl = kfStart.url;
       log(`    ✓ ${kfStartUrl}`);
     }
 
-    // 2. End keyframe (reuse from resume if present)
-    let kfEndUrl = cached?.keyframe_end_url;
+    // 2. End keyframe (reuse from resume if present, unless --force-regen)
+    let kfEndUrl = forceRegen ? undefined : cached?.keyframe_end_url;
     if (kfEndUrl) {
       log(`  ↻ render-keyframe end (reused): ${kfEndUrl}`);
     } else {
-      log(`  → render-keyframe end…`);
-      const kfEnd = await post('/api/render-keyframe', {
-        step_number: step.step_number,
-        kind: 'end',
-        reference_url: photoUrl,
-        prev_keyframe_url: kfStartUrl,
-        prompt: step.visual_prompt_end,
+      log(`  → render-keyframe end (direct fal)…`);
+      const endPrompt = wrapWithSceneLock(
+        step.visual_prompt_end,
+        plan.scene_lock,
+        step.subject_focus,
+        step.shot_type,
+      );
+      kfEndUrl = await callFalImageEdit({
+        prompt: endPrompt,
+        image_urls: [photoUrl, kfStartUrl],
         quality: 'high',
         image_size: 'landscape_16_9',
-        scene_lock: plan.scene_lock,
-        subject_focus: step.subject_focus,
-        shot_type: step.shot_type,
       });
-      kfEndUrl = kfEnd.url;
       log(`    ✓ ${kfEndUrl}`);
     }
     prevStartKeyframe = kfEndUrl;
 
-    // 3. Animate + narrate in parallel
-    log(`  → animate-step + narrate (parallel)…`);
-    const [anim, narr] = await Promise.all([
-      post('/api/animate-step', {
+    if (keyframesOnly) {
+      // Inspection-only mode: skip anim+narr and the manifest upload entirely.
+      progress.steps.push({
         step_number: step.step_number,
-        start_frame_url: kfStartUrl,
-        end_frame_url: kfEndUrl,
-        motion_prompt: step.motion_prompt,
-        duration_seconds: 5,
+        keyframe_start_url: kfStartUrl,
+        keyframe_end_url: kfEndUrl,
+      });
+      await persist();
+      log(`  step ${step.step_number} keyframes done in ${fmt(Date.now() - stepStart)}`);
+      continue;
+    }
+
+    // 3. Animate (direct fal) + narrate (via dev server for Gradium+Blob) in parallel
+    log(`  → animate-step (direct fal) + narrate (parallel)…`);
+    const motionPrompt = buildSceneWrapper(
+      step.motion_prompt,
+      step.motion_pacing,
+      step.camera_movement ?? plan.scene_lock?.camera_default,
+    );
+    const negativePrompt = buildNegativePrompt(plan.scene_lock?.negative_cues);
+    const [animUrl, narr] = await Promise.all([
+      callFalImageToVideo({
+        prompt: motionPrompt,
+        negative_prompt: negativePrompt,
+        image_url: kfStartUrl,
+        end_image_url: kfEndUrl,
         resolution: '720p',
-        negative_cues: plan.scene_lock?.negative_cues,
-        motion_pacing: step.motion_pacing,
-        camera_movement: step.camera_movement ?? plan.scene_lock?.camera_default,
+        duration: '5',
+        aspect_ratio: '16:9',
+        generate_audio: false,
       }),
       post('/api/narrate', {
         step_number: step.step_number,
@@ -324,8 +466,9 @@ async function probeDevServer() {
         job_id: `cache_${demoId}`,
       }),
     ]);
-    log(`    ✓ anim: ${anim.url}`);
+    log(`    ✓ anim: ${animUrl}`);
     log(`    ✓ narr: ${narr.url} (${narr.duration_seconds}s)`);
+    const anim = { url: animUrl, duration_seconds: 5 };
 
     progress.steps.push({
       step_number: step.step_number,
@@ -340,6 +483,25 @@ async function probeDevServer() {
     log(`  step ${step.step_number} done in ${fmt(Date.now() - stepStart)}`);
   }
   const steps = progress.steps;
+
+  if (keyframesOnly) {
+    console.log('\n────────────────────────────────────────────────────────────────');
+    console.log(`✓ KEYFRAMES-ONLY done. ${steps.length} step(s).`);
+    console.log(`  Progress JSON : ${progressPath}`);
+    console.log(`  Manifest upload skipped — re-run without --keyframes-only`);
+    console.log(`  (with --resume ${progressPath}) to finish the pipeline.`);
+    console.log('────────────────────────────────────────────────────────────────\n');
+    return;
+  }
+
+  if (stepsFilter) {
+    console.log('\n────────────────────────────────────────────────────────────────');
+    console.log(`✓ Partial run with --steps filter. ${steps.length} step(s) processed.`);
+    console.log(`  Progress JSON : ${progressPath}`);
+    console.log(`  Manifest upload skipped (partial state).`);
+    console.log('────────────────────────────────────────────────────────────────\n');
+    return;
+  }
 
   // 4. Build + upload manifest
   const manifest = {

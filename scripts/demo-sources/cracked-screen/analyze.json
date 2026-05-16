@@ -1,16 +1,41 @@
 {
-  "object": "Brand: Apple ; Model line: iPhone ; Model code or variant: iPhone 12 or iPhone 13 (6.1 inch OLED) ; Generation/Year: 2020-2022 ; Color/Finish: Black aluminum frame with rear glass ; Material: Aluminum + glass ; Visible markings: Apple logo on the back ; Distinguishing features: Flat-edge frame, Face ID notch, lightning port",
+  "object": "Brand: Apple ; Model line: iPhone ; Model code or variant: iPhone X-generation with notch (visually consistent with iPhone X / XS / XR / 11 / 11 Pro — back not visible, exact model not determinable from this angle) ; Generation/Year: 2017-2019 era (notch design, pre-iPhone 12, pre-flat-edge) ; Color/Finish: black, glossy front ; Material: aluminum frame visible at edges, glass front (back not visible) ; Visible markings: none readable ; Distinguishing features: top centre notch housing TrueDepth camera array, single horizontal earpiece slot at the top edge, slightly curved 2.5D front glass edge, rounded body corners",
   "category": "electronics",
-  "problem_visual": "Defect: Spider-web crack across the OLED front glass with localized impact point ; located at: Upper-center quadrant of the display ; severity: Major cosmetic + touch reliability risk ; visible signs: Multiple radiating cracks from a central point, glass shards lifted but not detached, display still appears to power on",
+  "problem_visual": "Defect: severely shattered front glass ; located at: front display panel — main impact point appears near the upper-middle / centre, with radial cracks fanning out in all directions toward the four edges ; severity: severe ; visible signs: dense spider-web fracture pattern, glass shards along several crack lines especially in the lower-middle area, screen is dark (powered off or unresponsive), no obvious black blotches through the cracks suggesting the LCD/OLED panel itself may still be functional",
   "damage_extent": "functional",
   "repair_feasibility": "home_advanced",
-  "estimated_skill_level": "Intermediate — requires patience and tiny tools",
+  "estimated_skill_level": "Intermediate — patient, calm hands, magnetic mat",
   "safety_warnings": [
-    "Power off the phone completely before opening",
-    "Disconnect the battery flex before any other internal work",
-    "Wear safety glasses — broken glass can flake off the display",
-    "Work on a clean, lit surface to keep track of tiny screws"
+    "Power off the iPhone completely before opening",
+    "Disconnect the battery flex BEFORE any other internal work",
+    "Wear safety glasses — broken glass can flake off",
+    "Work on a clean, lit, non-magnetic surface to track tiny screws"
   ],
-  "uncertainties": [],
-  "defect_marker": { "x": 50, "y": 42, "label": "Cracked screen impact point" }
+  "uncertainties": [
+    {
+      "field": "exact_model",
+      "question": "Which exact iPhone model is it? (— each model uses a different non-interchangeable display assembly)",
+      "purpose": "Each notch-era iPhone uses a different display assembly with non-interchangeable connectors and dimensions.",
+      "instruction": "Flip the phone over and count rear cameras: 1 = iPhone X or XR ; 2 = iPhone XS or 11 ; 3 = iPhone 11 Pro. Or check Settings > General > About on any working device synced with it.",
+      "placeholder": "iPhone 11",
+      "options": ["iPhone X / XS", "iPhone XR / 11", "iPhone 11 Pro / 11 Pro Max"]
+    },
+    {
+      "field": "display_type_preference",
+      "question": "OEM display or aftermarket? (— OEM keeps True Tone; aftermarket is ~half the price)",
+      "purpose": "OEM keeps True Tone and original color fidelity. Aftermarket is about half the price but may lose True Tone after the swap.",
+      "instruction": "If you don't care about True Tone, aftermarket is the budget choice — just pick a reputable seller to avoid dim or off-color panels.",
+      "placeholder": "OEM",
+      "options": ["OEM", "Aftermarket", "OEM refurbished"]
+    },
+    {
+      "field": "battery_age_concern",
+      "question": "Is the battery older than 2 years or below 80% health? (— swap it while the phone is open)",
+      "purpose": "Aged batteries can swell and risk puncture during handling. Replacing it at the same time is much easier with the phone already open.",
+      "instruction": "On a working iPhone: Settings > Battery > Battery Health & Charging.",
+      "placeholder": "85%",
+      "options": ["Above 85%", "80-85%", "Below 80%"]
+    }
+  ],
+  "defect_marker": { "x": 48, "y": 45, "label": "Shattered front glass — impact centre" }
 }
