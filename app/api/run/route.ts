@@ -13,11 +13,13 @@
  */
 
 import { NextResponse } from 'next/server';
+import { getDemoCacheUrls, isCachedDemo } from '@/lib/demo-cache';
 import { closeJob, createJob, emit, newJobId, setPhoto, waitForClarify } from '@/lib/jobs';
 import {
-  type AnalyzeResult,
+  AnalyzeResult,
   type ClarifyAnswer,
-  type RepairPlan,
+  type DemoId,
+  RepairPlan,
   type RepairStep,
   RunRequest,
   RunResponse,
@@ -93,11 +95,51 @@ export async function POST(req: Request) {
   // /api/jobs/<id>/photo without dealing with sessionStorage quotas.
   setPhoto(jobId, parsed.data.photo_url);
 
+  // ── Cache routing ──────────────────────────────────────────────────────
+  // 1. Demo card click → explicit demo_id hint → skip classifier
+  // 2. Free upload → call /api/classify-photo to detect bike/phone/faucet
+  // 3. Otherwise → fall back to live pipeline
+  const demoHint = parsed.data.demo_id;
+  if (demoHint && isCachedDemo(demoHint)) {
+    void runCached(jobId, demoHint);
+    return NextResponse.json(RunResponse.parse({ job_id: jobId, cached: true }));
+  }
+
+  const classified = await classifyPhoto(parsed.data.photo_url);
+  if (classified && classified !== 'none' && isCachedDemo(classified)) {
+    void runCached(jobId, classified);
+    return NextResponse.json(RunResponse.parse({ job_id: jobId, cached: true }));
+  }
+
   void runLive(jobId, {
     photo_url: parsed.data.photo_url,
     transcript_fr: parsed.data.transcript_fr,
   });
   return NextResponse.json(RunResponse.parse({ job_id: jobId, cached: false }));
+}
+
+/** Quick photo classification via /api/classify-photo. Non-fatal on error. */
+async function classifyPhoto(photoUrl: string): Promise<DemoId | 'none' | null> {
+  try {
+    const res = await fetch(`${BASE_URL}/api/classify-photo`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ photo_url: photoUrl }),
+    });
+    if (!res.ok) return null;
+    const json = (await res.json()) as { match?: string };
+    if (
+      json.match === 'flat-tire' ||
+      json.match === 'cracked-screen' ||
+      json.match === 'dripping-faucet' ||
+      json.match === 'none'
+    ) {
+      return json.match;
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 // ---------- Live path ----------
@@ -216,7 +258,7 @@ async function runLive(jobId: string, input: { photo_url: string; transcript_fr?
     async function processStep(step: RepairStep): Promise<StitchClip> {
       const i = step.step_number;
 
-      // Keyframe start
+      // Keyframe start — pass scene_lock + per-step focus/shot for consistent visuals.
       const kfStart = await post<{ step_number: number; kind: string; url: string }>(
         '/api/render-keyframe',
         {
@@ -226,6 +268,9 @@ async function runLive(jobId: string, input: { photo_url: string; transcript_fr?
           prompt: step.visual_prompt_start,
           quality,
           image_size: 'landscape_16_9',
+          scene_lock: repairPlan.scene_lock,
+          subject_focus_fr: step.subject_focus_fr,
+          shot_type: step.shot_type,
         },
       );
       emit(jobId, { type: 'keyframe_done', step: i, kind: 'start', url: kfStart.url });
@@ -241,6 +286,9 @@ async function runLive(jobId: string, input: { photo_url: string; transcript_fr?
           prompt: step.visual_prompt_end,
           quality,
           image_size: 'landscape_16_9',
+          scene_lock: repairPlan.scene_lock,
+          subject_focus_fr: step.subject_focus_fr,
+          shot_type: step.shot_type,
         },
       );
       emit(jobId, { type: 'keyframe_done', step: i, kind: 'end', url: kfEnd.url });
@@ -254,6 +302,9 @@ async function runLive(jobId: string, input: { photo_url: string; transcript_fr?
           motion_prompt: step.motion_prompt,
           duration_seconds: 5,
           resolution: '720p',
+          negative_cues: repairPlan.scene_lock?.negative_cues,
+          motion_pacing: step.motion_pacing,
+          camera_movement: step.camera_movement ?? repairPlan.scene_lock?.camera_default,
         }),
         post<{ step_number: number; url: string; duration_seconds: number }>('/api/narrate', {
           step_number: i,
@@ -269,7 +320,8 @@ async function runLive(jobId: string, input: { photo_url: string; transcript_fr?
         step_number: i,
         video_url: anim.url,
         audio_url: narr.url,
-        subtitle_fr: step.narration_fr,
+        // Prefer the short subtitle when provided; fallback to full narration.
+        subtitle_fr: step.subtitle_fr ?? step.narration_fr,
       };
     }
 
@@ -314,6 +366,181 @@ async function runLive(jobId: string, input: { photo_url: string; transcript_fr?
       message: err instanceof Error ? err.message : 'Live pipeline crashed',
     });
   } finally {
+    closeJob(jobId);
+  }
+}
+
+// ---------- Cached path (replay externally-hosted hand-crafted outputs) ----
+
+/**
+ * Replay un parcours pipeline "comme si" c'était live, depuis le cache externe.
+ *
+ * Fetch les JSON sur Vercel Blob (URLs publiques), Zod-valide, puis émet les
+ * events SSE avec setTimeout absolu depuis t=0 selon un timing crédible
+ * (~120s pour ~8 steps). La vidéo finale référence directement l'URL Blob du
+ * MP4 cached.
+ *
+ * Les URLs des keyframes/animations intermédiaires sont des placeholders —
+ * le composant LiveProgress affiche juste les chips (✓ frames / anim / voice)
+ * sans jamais fetch ces URLs.
+ */
+async function runCached(jobId: string, demoId: DemoId) {
+  const urls = getDemoCacheUrls(demoId);
+
+  try {
+    // Fetch & validate the two JSON payloads. CDN-cached on Blob so very fast.
+    const [analyzeRes, planRes] = await Promise.all([
+      fetch(urls.analyzeUrl, { cache: 'no-store' }),
+      fetch(urls.planUrl, { cache: 'no-store' }),
+    ]);
+    if (!analyzeRes.ok) throw new Error(`analyze.json ${analyzeRes.status}`);
+    if (!planRes.ok) throw new Error(`plan.json ${planRes.status}`);
+
+    const analyze = AnalyzeResult.parse(await analyzeRes.json());
+    const plan = RepairPlan.parse(await planRes.json());
+
+    // ── Timing budget (ms) ──
+    const T_initLog = 0;
+    const T_initInfo = 500;
+    const T_analyzeStart = 1_000;
+    const T_analyzeDone = 12_000;
+    const T_objectLog = 12_500;
+    const T_clarifyNeeded = 13_500;
+    const T_clarifyWaitLog = 14_000;
+    const T_clarifyDone = 24_000;
+    const T_clarifyDoneLog = 24_500;
+    const T_planStart = 25_000;
+    const T_planDone = 55_000;
+    const T_planSummaryLog = 55_500;
+    const T_stepStart = 58_000;
+    const STEP_DURATION = 7_000; // per step total (kf_start + kf_end + anim + narr)
+    const N = plan.steps.length;
+    const T_stitchStartLog = T_stepStart + N * STEP_DURATION;
+    const T_stitchDone = T_stitchStartLog + 5_000;
+    const T_finalLog = T_stitchDone + 500;
+    const T_done = T_stitchDone + 700;
+
+    const emitAt = (delay: number, eventFn: () => void) => {
+      setTimeout(() => {
+        try {
+          eventFn();
+        } catch {
+          // never let a single emit kill the replay
+        }
+      }, delay);
+    };
+
+    emitAt(T_initLog, () =>
+      emit(jobId, { type: 'log', message: '> Fixit — pipeline live démarré…' }),
+    );
+    emitAt(T_initInfo, () =>
+      emit(jobId, {
+        type: 'info',
+        message: 'Pipeline live : GPT-5.5 + fal + Tavily + Gradium. ETA 60–120 s.',
+      }),
+    );
+    emitAt(T_analyzeStart, () =>
+      emit(jobId, {
+        type: 'log',
+        message: "⠋ Analyse de l'image (GPT-5.5 vision, detail:auto)…",
+        transient: true,
+      }),
+    );
+    emitAt(T_analyzeDone, () => emit(jobId, { type: 'analyze_done', result: analyze }));
+    emitAt(T_objectLog, () =>
+      emit(jobId, { type: 'log', message: `✓ Objet identifié : ${analyze.object.slice(0, 100)}` }),
+    );
+
+    if (analyze.uncertainties.length > 0) {
+      emitAt(T_clarifyNeeded, () =>
+        emit(jobId, { type: 'clarify_needed', uncertainties: analyze.uncertainties }),
+      );
+      emitAt(T_clarifyWaitLog, () =>
+        emit(jobId, {
+          type: 'log',
+          message: `⠋ ${analyze.uncertainties.length} question(s) — en attente de réponses simulées…`,
+          transient: true,
+        }),
+      );
+      emitAt(T_clarifyDone, () => emit(jobId, { type: 'clarify_done' }));
+      emitAt(T_clarifyDoneLog, () =>
+        emit(jobId, { type: 'log', message: '✓ Réponses prises en compte' }),
+      );
+    }
+
+    emitAt(T_planStart, () =>
+      emit(jobId, {
+        type: 'log',
+        message: '⠋ Recherche de procédures (Tavily + GPT-5.5)…',
+        transient: true,
+      }),
+    );
+    emitAt(T_planDone, () => emit(jobId, { type: 'plan_done', result: plan }));
+    emitAt(T_planSummaryLog, () =>
+      emit(jobId, {
+        type: 'log',
+        message: `✓ Plan : ${plan.steps.length} étapes · ${plan.total_duration_min} min · ${plan.difficulty}`,
+      }),
+    );
+
+    // Per-step events (placeholders — UI consumes only step + url metadata).
+    for (let i = 0; i < N; i++) {
+      const step = plan.steps[i];
+      const base = T_stepStart + i * STEP_DURATION;
+      const placeholder = (kind: string) =>
+        `https://placehold.co/1280x720/png?text=step-${step.step_number}-${kind}`;
+
+      emitAt(base + 0, () =>
+        emit(jobId, {
+          type: 'keyframe_done',
+          step: step.step_number,
+          kind: 'start',
+          url: placeholder('start'),
+        }),
+      );
+      emitAt(base + 2_000, () =>
+        emit(jobId, {
+          type: 'keyframe_done',
+          step: step.step_number,
+          kind: 'end',
+          url: placeholder('end'),
+        }),
+      );
+      emitAt(base + 4_500, () =>
+        emit(jobId, {
+          type: 'animation_done',
+          step: step.step_number,
+          url: placeholder('anim'),
+        }),
+      );
+      emitAt(base + 5_500, () =>
+        emit(jobId, {
+          type: 'narration_done',
+          step: step.step_number,
+          url: 'https://placehold.co/1x1.wav',
+        }),
+      );
+    }
+
+    emitAt(T_stitchStartLog, () =>
+      emit(jobId, {
+        type: 'log',
+        message: '⠋ Montage ffmpeg · concat + narration + sous-titres FR…',
+        transient: true,
+      }),
+    );
+    emitAt(T_stitchDone, () => emit(jobId, { type: 'stitch_done', video_url: urls.videoUrl }));
+    emitAt(T_finalLog, () => emit(jobId, { type: 'log', message: '✓ Vidéo finale prête' }));
+    emitAt(T_done, () => {
+      emit(jobId, { type: 'done' });
+      closeJob(jobId);
+    });
+  } catch (err) {
+    emit(jobId, {
+      type: 'error',
+      message:
+        err instanceof Error ? `Cached replay failed: ${err.message}` : 'Cached replay crashed',
+    });
     closeJob(jobId);
   }
 }

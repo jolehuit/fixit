@@ -39,17 +39,43 @@ type SeedanceInput = {
  *   - tools / objects appearing or disappearing mid-clip
  *   - the subject morphing into a different object
  *   - background changing (workshop → kitchen, etc.)
+ *
+ * Reference: Seedance 2.0 image-to-video best practices —
+ * "preserve composition and colors", minimal motion prompt, no camera moves.
  */
-const SEEDANCE_SCENE_WRAPPER = (motion: string): string =>
-  [
-    'Camera fixed in place. Same scene, same framing, same lighting from start to end.',
-    'No camera pan, no camera zoom, no cuts, no scene change.',
+const PACING_HINTS: Record<'slow_methodical' | 'controlled' | 'deliberate', string> = {
+  slow_methodical: 'Movements are slow, methodical, and unhurried.',
+  controlled: 'Movements are controlled and steady.',
+  deliberate: 'Movements are deliberate but confident.',
+};
+
+function buildSceneWrapper(
+  motion: string,
+  motionPacing?: 'slow_methodical' | 'controlled' | 'deliberate',
+  cameraMovement?:
+    | 'static'
+    | 'subtle_pan_left'
+    | 'subtle_pan_right'
+    | 'subtle_zoom_in'
+    | 'subtle_zoom_out',
+): string {
+  const cameraDirective =
+    !cameraMovement || cameraMovement === 'static'
+      ? 'Camera fixed in place — no pan, no zoom, no cuts, no scene change.'
+      : `Camera applies only a ${cameraMovement.replace(/_/g, ' ')} — no other movement, no cuts, no scene change.`;
+
+  const lines = [
+    cameraDirective,
+    'Same scene, same framing, same lighting from start to end. Preserve composition and colors of the reference frame.',
     'The only thing that moves is the action described next.',
     `Action: ${motion}`,
     'The object being repaired, the hands, and the tools remain consistent with the first frame — never multiply, morph, or disappear.',
-  ].join(' ');
+  ];
+  if (motionPacing) lines.push(PACING_HINTS[motionPacing]);
+  return lines.join(' ');
+}
 
-const SEEDANCE_NEGATIVE_PROMPT = [
+const BASE_NEGATIVE_CUES = [
   'camera pan',
   'camera zoom',
   'camera shake',
@@ -69,7 +95,13 @@ const SEEDANCE_NEGATIVE_PROMPT = [
   'blurry',
   'low quality',
   'distorted',
-].join(', ');
+];
+
+function buildNegativePrompt(extraCues: readonly string[] | undefined): string {
+  const merged = new Set<string>(BASE_NEGATIVE_CUES);
+  if (extraCues) for (const cue of extraCues) merged.add(cue);
+  return Array.from(merged).join(', ');
+}
 
 type SeedanceOutput = {
   video?: { url?: string };
@@ -100,11 +132,14 @@ export async function POST(req: Request) {
     motion_prompt,
     duration_seconds,
     resolution,
+    negative_cues,
+    motion_pacing,
+    camera_movement,
   } = parsed.data;
 
   const input: SeedanceInput = {
-    prompt: SEEDANCE_SCENE_WRAPPER(motion_prompt),
-    negative_prompt: SEEDANCE_NEGATIVE_PROMPT,
+    prompt: buildSceneWrapper(motion_prompt, motion_pacing, camera_movement),
+    negative_prompt: buildNegativePrompt(negative_cues),
     image_url: start_frame_url,
     end_image_url: end_frame_url,
     resolution,

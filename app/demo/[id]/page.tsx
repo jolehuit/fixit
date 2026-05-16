@@ -55,7 +55,13 @@ export default function DemoIntroPage({ params }: { params: Promise<{ id: string
       const runRes = await fetch('/api/run', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ photo_url: dataUrl, transcript_fr: demo.transcript_fr }),
+        // demo_id hint lets /api/run skip the photo classifier and go straight
+        // to the cached replay (when the cache env vars are configured).
+        body: JSON.stringify({
+          photo_url: dataUrl,
+          transcript_fr: demo.transcript_fr,
+          demo_id: demoId,
+        }),
       });
       if (!runRes.ok) {
         const text = await runRes.text().catch(() => '');

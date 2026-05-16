@@ -60,30 +60,67 @@ Example:
 PHASE 4 — SPARE-PARTS UNCERTAINTIES:
 Return up to 3 uncertainties that genuinely block ordering the correct replacement part. Quality > quantity.
 
-For EACH uncertainty:
-- "field" is a snake_case key downstream steps will use to look up the answer.
-- "question_fr" is the user-facing question. Format strictly as:
-  "<short direct English question> (— used to <one-line purpose>)"
-  Examples:
-    "Which exact iPhone model? (— used to pick the correct display assembly P/N)"
-    "What is the trap diameter? (— used to size the slip washer and replacement nut)"
-- "options": **always populate 3 options** when the field has KNOWN common candidates in the domain (iPhones, common tire sizes, common voltages, standard pipe diameters, etc.). Pick the 3 MOST LIKELY values based on the photo + general knowledge. The UI ALSO renders a free-text fallback under the buttons, so options are never a hard restriction — they're shortcuts for the common case. Each option ≤3 words. Examples of when to populate:
-    * iPhone model → top 3 candidates from the visible generation cluster (e.g. ["iPhone 11", "iPhone 12", "iPhone 13"])
-    * Drain diameter (EU) → ["32 mm", "40 mm", "50 mm"]
-    * Tire valve type → ["Schrader", "Presta", "Dunlop"]
-    * Bike wheel size → ["26 in", "27.5 in", "29 in"]
-  OMIT "options" only when the answer space is truly unbounded (a free serial number, a textual model code with no realistic 3-cluster, a measured value with no standard increments).
+For EACH uncertainty, populate the following fields:
 
-Examples of useful uncertainty fields (use what fits the object, do not force all):
-- exact_model_number, brand_model, variant_or_generation
-- purchase_year, production_year, region_or_market
-- tire_size_etrto, wheel_diameter, valve_type
-- trap_diameter_mm, hose_diameter_mm, thread_type
-- battery_capacity_mah, voltage, power_rating_watts
-- storage_capacity, color_or_finish
-- visible_serial_number, label_code
+- "field" : snake_case key downstream steps will use to look up the answer.
+
+- "question_fr" : PURE user-facing question, ≤8 words English. No parenthetical, no purpose embedded.
+  Examples:
+    "Which exact iPhone model?"
+    "What is the trap diameter?"
+    "What tire size is on the sidewall?"
+
+- "purpose_fr" (optional, recommended) : ≤12 words English explaining WHY we ask. Shown as a tooltip / subtitle.
+  Examples:
+    "Used to pick the correct display assembly P/N"
+    "Used to size the replacement slip washer and nut"
+
+- "instruction_fr" (optional, recommended for physical-inspection answers) : ≤20 words English describing WHERE / HOW the user finds the answer in the real world. OMIT when the answer is obvious from photo or general knowledge (e.g. choosing a phone model from a list — user knows their phone).
+  Examples (populate):
+    "Read the numbers on the tire sidewall — look for a code like 700x25c or 26x1.95."
+    "Try to unlock the phone; if you see anything on screen AND touch responds, both work."
+    "Wrap a string around the pipe, measure in mm, divide by 3.14."
+  Examples (omit):
+    "Which color?"  (visible in photo)
+    "iPhone 11 / 12 / 13?"  (user knows their model from memory)
+
+- "placeholder_fr" (optional, for free-text inputs) : ≤6 words English example value, shown as the input placeholder.
+  Examples:
+    "e.g. 27.5x2.10"
+    "e.g. McAlpine ST32M-WH"
+
+- "options" : populate 3 (up to 5) most likely candidates when the domain has known enumerable choices. Each ≤3 words. The UI ALWAYS renders a free-text fallback under the buttons, so options are shortcuts, not restrictions.
+  Examples:
+    iPhone family  → ["iPhone 11", "iPhone 12", "iPhone 13"]
+    EU drain dia.  → ["32 mm", "40 mm", "50 mm"]
+    Tire valve     → ["Schrader", "Presta", "Dunlop"]
+    Bike wheel     → ["26 in", "27.5 in", "29 in"]
+  OMIT only when the answer space is truly unbounded (a free serial number, a unique label code, a measured value with no standard increments).
+
+Useful uncertainty field names (snake_case): exact_model_number, brand_model, variant_or_generation, purchase_year, production_year, region_or_market, tire_size_etrto, wheel_diameter, valve_type, trap_diameter_mm, hose_diameter_mm, thread_type, battery_capacity_mah, voltage, power_rating_watts, storage_capacity, color_or_finish, visible_serial_number, label_code, leaking_part, display_function, tire_damage.
 
 Do NOT invent uncertainties to look thorough. Empty array if the photo + transcript already determine the part.
+
+PHASE 5 — SAFETY + FEASIBILITY METADATA (top-level):
+
+- "damage_extent" : exactly one of "cosmetic" (visual only, still functions) | "functional" (some feature broken, still partially usable) | "critical" (unsafe or unusable until repaired).
+
+- "repair_feasibility" : exactly one of
+    "home_easy"      → anyone can do it with basic tools
+    "home_advanced"  → requires some experience, specialised tools, careful work
+    "professional"   → recommend professional intervention (gas, mains electrical, complex disassembly with calibration)
+
+- "estimated_skill_level_fr" : ≤10 words English describing the skill bar.
+  Examples:
+    "Basic tool experience helpful, no special training needed"
+    "Precise hand work and patience required; first iPhone repair tricky"
+
+- "safety_warnings_fr" : 0-4 warnings that the user MUST know before starting. ≤15 words each. Be specific to what the user sees in the photo, not generic.
+  Examples:
+    "Disconnect the battery before any disassembly"
+    "Wear safety glasses — glass shards on cracked iPhone displays"
+    "Shut off the water supply under the sink before unscrewing trap nuts"
+    "Capacitors on the logic board can hold dangerous charge — keep tools clear"
 
 OTHER REQUIRED FIELDS:
 - "category" must be exactly one of: vehicle, electronics, plumbing, furniture, other.

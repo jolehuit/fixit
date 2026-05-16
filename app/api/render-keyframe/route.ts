@@ -14,9 +14,43 @@
 
 import { NextResponse } from 'next/server';
 import { fal, FAL_IMAGE_EDIT_ENDPOINT } from '@/lib/fal';
-import { Keyframe, RenderKeyframeRequest } from '@/lib/types';
+import { Keyframe, RenderKeyframeRequest, type SceneLock, type ShotType } from '@/lib/types';
 
 export const runtime = 'nodejs';
+
+/**
+ * Wrap the per-step visual prompt with scene-wide constants from scene_lock
+ * (subject, style, palette, consistency phrases). Empirically verified to keep
+ * GPT Image 2 Edit's output coherent across many keyframes for the same object.
+ *
+ * Reference: Seedance 2.0 official guide + GPT Image 2 prompt techniques —
+ * "same character", "preserve composition and colors", "no variation in
+ * appearance" are the magic phrases.
+ */
+function wrapWithSceneLock(
+  prompt: string,
+  scene_lock: SceneLock | undefined,
+  subject_focus_fr: string | undefined,
+  shot_type: ShotType | undefined,
+): string {
+  if (!scene_lock) return prompt;
+  const parts: string[] = [];
+  parts.push(`Subject: ${scene_lock.subject}.`);
+  const finalShot = shot_type ?? scene_lock.shot_default;
+  parts.push(`Shot: ${finalShot}, ${scene_lock.style}.`);
+  parts.push(`Environment: ${scene_lock.environment}.`);
+  parts.push(`Hands: ${scene_lock.hands_style}.`);
+  parts.push(`Color palette: ${scene_lock.color_palette_fr}.`);
+  if (subject_focus_fr) parts.push(`Focus on: ${subject_focus_fr}.`);
+  parts.push(`Scene action: ${prompt}.`);
+  if (scene_lock.consistency_phrases.length > 0) {
+    parts.push(scene_lock.consistency_phrases.map((p) => p.replace(/\.$/, '')).join('; ') + '.');
+  }
+  if (scene_lock.negative_cues.length > 0) {
+    parts.push(`Avoid: ${scene_lock.negative_cues.join(', ')}.`);
+  }
+  return parts.join(' ');
+}
 
 /**
  * Translate our schema's `image_size` to the fal preset vocabulary.
@@ -53,14 +87,26 @@ export async function POST(req: Request) {
     );
   }
 
-  const { step_number, kind, reference_url, prev_keyframe_url, prompt, quality, image_size } =
-    parsed.data;
+  const {
+    step_number,
+    kind,
+    reference_url,
+    prev_keyframe_url,
+    prompt,
+    quality,
+    image_size,
+    scene_lock,
+    subject_focus_fr,
+    shot_type,
+  } = parsed.data;
 
   // Multi-image reference: include prev keyframe when present for step continuity.
   const image_urls = prev_keyframe_url ? [reference_url, prev_keyframe_url] : [reference_url];
 
+  const finalPrompt = wrapWithSceneLock(prompt, scene_lock, subject_focus_fr, shot_type);
+
   const input = {
-    prompt,
+    prompt: finalPrompt,
     image_urls,
     quality, // 'high' | 'medium' map 1:1 to fal's enum
     image_size: toFalImageSize(image_size),

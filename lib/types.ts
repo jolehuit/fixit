@@ -29,10 +29,22 @@ export type DemoId = z.infer<typeof DemoId>;
 
 // ---------- Vision analysis ----------
 
+export const DamageExtent = z.enum(['cosmetic', 'functional', 'critical']);
+export type DamageExtent = z.infer<typeof DamageExtent>;
+
+export const RepairFeasibility = z.enum(['home_easy', 'home_advanced', 'professional']);
+export type RepairFeasibility = z.infer<typeof RepairFeasibility>;
+
 export const Uncertainty = z.object({
   field: z.string(),
   question_fr: z.string(),
-  options: z.array(z.string()).max(3).optional(),
+  /** Why we ask — shown as tooltip / subtitle in the clarify UI. */
+  purpose_fr: z.string().optional(),
+  /** Where / how the user finds the answer in the physical world. */
+  instruction_fr: z.string().optional(),
+  /** Placeholder for the free-text input when no exact match in options. */
+  placeholder_fr: z.string().optional(),
+  options: z.array(z.string()).max(5).optional(),
 });
 export type Uncertainty = z.infer<typeof Uncertainty>;
 
@@ -48,6 +60,14 @@ export const AnalyzeResult = z.object({
   object: z.string(),
   category: RepairCategory,
   problem_visual: z.string(),
+  /** How bad the defect is, beyond visual severity (cosmetic / functional / critical). */
+  damage_extent: DamageExtent.optional(),
+  /** DIY recommendation: home_easy = anyone, home_advanced = some experience, professional = call a pro. */
+  repair_feasibility: RepairFeasibility.optional(),
+  /** One-liner ≤10 words describing the skill bar. */
+  estimated_skill_level_fr: z.string().optional(),
+  /** Up to 4 safety warnings the user should know before starting. */
+  safety_warnings_fr: z.array(z.string()).max(4).optional(),
   uncertainties: z.array(Uncertainty),
   /** Where to draw the pulsing marker on the photo. Optional for back-compat. */
   defect_marker: DefectMarker.optional(),
@@ -69,6 +89,59 @@ export type ClarifyOptions = z.infer<typeof ClarifyOptions>;
 
 // ---------- Repair plan ----------
 
+export const ShotType = z.enum(['wide', 'medium', 'close-up', 'macro']);
+export type ShotType = z.infer<typeof ShotType>;
+
+export const CameraMovement = z.enum([
+  'static',
+  'subtle_pan_left',
+  'subtle_pan_right',
+  'subtle_zoom_in',
+  'subtle_zoom_out',
+]);
+export type CameraMovement = z.infer<typeof CameraMovement>;
+
+export const MotionPacing = z.enum(['slow_methodical', 'controlled', 'deliberate']);
+export type MotionPacing = z.infer<typeof MotionPacing>;
+
+/**
+ * Scene-wide constants injected verbatim into every keyframe + animation prompt.
+ *
+ * These exist because GPT Image 2 Edit and Seedance need the SAME wording
+ * across calls to keep the object's identity, lighting and palette consistent
+ * (verified by Seedance 2.0 & GPT Image 2 prompt guides: "preserve composition
+ * and colors", "same character", "no variation in appearance").
+ */
+export const SceneLock = z.object({
+  /** The unchanging description of the object — repeated in every keyframe prompt. */
+  subject: z.string(),
+  environment: z.string(),
+  hands_style: z.string(),
+  style: z.string(),
+  color_palette_fr: z.string(),
+  shot_default: ShotType,
+  camera_default: CameraMovement,
+  /** Phrases injected verbatim into every GPT Image 2 prompt (consistency anchors). */
+  consistency_phrases: z.array(z.string()).max(8),
+  /** Items to suppress — fed to both image and video models' negative_prompt. */
+  negative_cues: z.array(z.string()).max(15),
+});
+export type SceneLock = z.infer<typeof SceneLock>;
+
+export const RepairPartSummary = z.object({
+  name: z.string(),
+  quantity: z.number().int().positive(),
+  specification_fr: z.string().optional(),
+});
+export type RepairPartSummary = z.infer<typeof RepairPartSummary>;
+
+export const RepairToolSummary = z.object({
+  name: z.string(),
+  required: z.boolean(),
+  specification_fr: z.string().optional(),
+});
+export type RepairToolSummary = z.infer<typeof RepairToolSummary>;
+
 export const RepairStep = z.object({
   step_number: z.number().int().positive(),
   title_fr: z.string(),
@@ -76,6 +149,14 @@ export const RepairStep = z.object({
   parts_needed: z.array(z.string()),
   tools_needed: z.array(z.string()),
   duration_seconds: z.number().positive(),
+  /** Camera distance for this step — overrides scene_lock.shot_default. */
+  shot_type: ShotType.optional(),
+  /** Camera motion for this step — overrides scene_lock.camera_default. Repair tutorials are almost always `static`. */
+  camera_movement: CameraMovement.optional(),
+  /** How intense the hands/tools motion should feel. */
+  motion_pacing: MotionPacing.optional(),
+  /** What the keyframe should anchor on — fed verbatim to GPT Image 2. */
+  subject_focus_fr: z.string().optional(),
   /** Prompt for the START keyframe via gpt-image-2/edit */
   visual_prompt_start: z.string(),
   /** Prompt for the END keyframe via gpt-image-2/edit */
@@ -84,6 +165,14 @@ export const RepairStep = z.object({
   motion_prompt: z.string(),
   /** Narration text (50–80 words) fed to Gradium TTS */
   narration_fr: z.string(),
+  /** ≤8 words burned-in subtitle (1 line), summary of the narration. */
+  subtitle_fr: z.string().optional(),
+  /** Specific safety warning for THIS step (battery short, sharp edges…). */
+  safety_note_fr: z.string().optional(),
+  /** How the user verifies the step succeeded. */
+  success_criteria_fr: z.string().optional(),
+  /** Common mistake / failure mode to avoid. */
+  common_mistake_fr: z.string().optional(),
 });
 export type RepairStep = z.infer<typeof RepairStep>;
 
@@ -91,6 +180,21 @@ export const RepairPlan = z.object({
   problem_summary_fr: z.string(),
   difficulty: Difficulty,
   total_duration_min: z.number().positive(),
+  /** Parts cost range in € — pieces only, no labour. */
+  estimated_cost_eur: z
+    .object({
+      parts_low: z.number().min(0),
+      parts_high: z.number().min(0),
+    })
+    .optional(),
+  /** Global safety warnings BEFORE starting (power off, eye protection…). */
+  safety_pre_check_fr: z.array(z.string()).max(4).optional(),
+  /** Consolidated parts list across all steps. */
+  parts_summary: z.array(RepairPartSummary).optional(),
+  /** Consolidated tools list across all steps. */
+  tools_summary: z.array(RepairToolSummary).optional(),
+  /** Scene-wide constants for visual + video consistency. */
+  scene_lock: SceneLock.optional(),
   steps: z.array(RepairStep).min(2).max(10),
 });
 export type RepairPlan = z.infer<typeof RepairPlan>;
@@ -153,6 +257,12 @@ export const RenderKeyframeRequest = z.object({
   prev_keyframe_url: z.string().url().optional(),
   quality: Quality.default('high'),
   image_size: z.enum(['square', 'landscape_16_9', 'portrait_9_16']).default('landscape_16_9'),
+  /** Scene-wide constants from the plan — injected into the GPT Image 2 prompt for consistency. */
+  scene_lock: SceneLock.optional(),
+  /** What this keyframe should anchor on (e.g. "the lower-left pentalobe screw"). */
+  subject_focus_fr: z.string().optional(),
+  /** Camera framing for this step (override of scene_lock.shot_default). */
+  shot_type: ShotType.optional(),
 });
 export type RenderKeyframeRequest = z.infer<typeof RenderKeyframeRequest>;
 
@@ -165,6 +275,12 @@ export const AnimateStepRequest = z.object({
     .union([z.literal(4), z.literal(5), z.literal(6), z.literal(7), z.literal(8)])
     .default(5),
   resolution: z.enum(['480p', '720p']).default('720p'),
+  /** Additional negative cues to merge with the route's built-in list. */
+  negative_cues: z.array(z.string()).optional(),
+  /** Motion pacing hint — folded into the Seedance scene wrapper. */
+  motion_pacing: MotionPacing.optional(),
+  /** Camera movement hint — almost always 'static' for repair tutorials. */
+  camera_movement: CameraMovement.optional(),
 });
 export type AnimateStepRequest = z.infer<typeof AnimateStepRequest>;
 
@@ -190,10 +306,16 @@ export const StitchRequest = z.object({
 });
 export type StitchRequest = z.infer<typeof StitchRequest>;
 
-/** Live pipeline only — the cached-script path was removed. */
+/**
+ * Photo path is the source of truth; demo_id is an OPTIONAL hint that lets
+ * /api/run skip the photo classifier and route directly to the cached replay
+ * when the user clicks a known demo card. Free uploads omit it and trigger
+ * either classify→cache or live based on configuration.
+ */
 export const RunRequest = z.object({
   photo_url: z.string().url(),
   transcript_fr: z.string().optional(),
+  demo_id: DemoId.optional(),
 });
 export type RunRequest = z.infer<typeof RunRequest>;
 

@@ -291,6 +291,17 @@ function IdentificationCard({ analyze }: { analyze: AnalyzeResult }) {
   const objSlots = analyze.object.split(/\s*;\s*/).filter(Boolean);
   const probSlots = analyze.problem_visual.split(/\s*;\s*/).filter(Boolean);
 
+  const feasibilityLabel: Record<NonNullable<AnalyzeResult['repair_feasibility']>, string> = {
+    home_easy: 'Easy DIY',
+    home_advanced: 'Advanced DIY',
+    professional: 'Pro recommended',
+  };
+  const damageLabel: Record<NonNullable<AnalyzeResult['damage_extent']>, string> = {
+    cosmetic: 'Cosmetic',
+    functional: 'Functional',
+    critical: 'Critical',
+  };
+
   return (
     <section className="flex animate-[fade-in_220ms_ease-out] flex-col gap-2 rounded-lg border border-[color:var(--color-border)] bg-white p-4">
       <div className="flex items-baseline justify-between gap-3">
@@ -303,6 +314,31 @@ function IdentificationCard({ analyze }: { analyze: AnalyzeResult }) {
           {open ? 'Hide details' : 'Show details'}
         </button>
       </div>
+
+      {/* Badges row : feasibility + damage_extent */}
+      {analyze.repair_feasibility || analyze.damage_extent ? (
+        <div className="flex flex-wrap items-center gap-1.5">
+          {analyze.repair_feasibility ? (
+            <span
+              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                analyze.repair_feasibility === 'professional'
+                  ? 'bg-[color:var(--color-danger)]/10 text-[color:var(--color-danger)]'
+                  : analyze.repair_feasibility === 'home_advanced'
+                    ? 'bg-[color:var(--color-warn)]/10 text-[color:var(--color-warn)]'
+                    : 'bg-[color:var(--color-accent)]/10 text-[color:var(--color-accent)]'
+              }`}
+            >
+              {feasibilityLabel[analyze.repair_feasibility]}
+            </span>
+          ) : null}
+          {analyze.damage_extent ? (
+            <span className="inline-flex items-center gap-1 rounded-full bg-[color:var(--color-surface)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[color:var(--color-muted)]">
+              {damageLabel[analyze.damage_extent]} damage
+            </span>
+          ) : null}
+        </div>
+      ) : null}
+
       <p className="text-sm text-[color:var(--color-fg)]">
         <span className="font-medium">Object — </span>
         {objSummary}
@@ -311,6 +347,26 @@ function IdentificationCard({ analyze }: { analyze: AnalyzeResult }) {
         <span className="font-medium">Problem — </span>
         {probSummary}
       </p>
+
+      {analyze.estimated_skill_level_fr ? (
+        <p className="text-xs italic text-[color:var(--color-muted)]">
+          Skill: {analyze.estimated_skill_level_fr}
+        </p>
+      ) : null}
+
+      {analyze.safety_warnings_fr && analyze.safety_warnings_fr.length > 0 ? (
+        <div className="mt-1 rounded-md border border-[color:var(--color-warn)]/40 bg-[color:var(--color-warn)]/5 px-3 py-2 text-xs">
+          <p className="font-semibold uppercase tracking-wide text-[color:var(--color-warn)]">
+            ⚠ Before you start
+          </p>
+          <ul className="mt-1 flex flex-col gap-0.5 text-[color:var(--color-fg)]">
+            {analyze.safety_warnings_fr.map((w) => (
+              <li key={w}>• {w}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
       {open ? (
         <div className="mt-2 flex flex-col gap-3 border-t border-[color:var(--color-border)] pt-3">
           <SlotList label="Object slots" slots={objSlots} />
