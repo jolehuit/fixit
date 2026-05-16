@@ -4,62 +4,35 @@ import { demoList } from '@/lib/demos';
 
 export default function HomePage() {
   return (
-    <div className="min-h-screen bg-white">
+    <div className="flex min-h-screen flex-col bg-white">
       <header className="border-b border-[color:var(--color-border)]">
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
-          <div className="flex items-center gap-2">
-            <span className="text-lg font-semibold tracking-tight text-[color:var(--color-fg)]">
-              fixit
-            </span>
-            <span className="text-xs uppercase tracking-widest text-[color:var(--color-subtle)]">
-              beta
-            </span>
-          </div>
-          <nav className="hidden gap-6 text-sm text-[color:var(--color-muted)] sm:flex">
-            <span>Guides</span>
-            <span>How it works</span>
-            <span>About</span>
-          </nav>
+        <div className="mx-auto flex h-16 max-w-6xl items-center px-6">
+          <img src="/logo.webp" alt="fixit" className="h-10 w-auto" />
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl px-6 py-16 sm:py-24">
-        <section className="flex max-w-3xl flex-col gap-5">
-          <span className="text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--color-accent)]">
-            AI repair assistant
-          </span>
-          <h1 className="text-balance text-4xl font-bold leading-[1.05] text-[color:var(--color-fg)] sm:text-6xl">
-            Get a personalized repair video in 90 seconds.
+      <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col justify-center px-6 py-6">
+        <section className="mb-6 flex max-w-3xl flex-col gap-2">
+          <h1 className="text-balance text-2xl font-bold leading-tight text-[color:var(--color-fg)] sm:text-3xl">
+            Snap a photo, get a repair video.
           </h1>
-          <p className="max-w-xl text-lg text-[color:var(--color-muted)]">
-            Drop a photo of what's broken. Our AI watches it, asks a couple of clarifying questions,
-            then walks you through the fix step by step.
+          <p className="text-sm text-[color:var(--color-muted)] sm:text-base">
+            Pick a guide below or upload your own. The AI walks you through the fix.
           </p>
         </section>
-
-        <section className="mt-10 sm:mt-12">
-          <PhotoUpload />
-        </section>
-
-        <section className="mt-20 sm:mt-24">
-          <div className="mb-6 flex items-end justify-between gap-4">
-            <h2 className="text-xl font-semibold text-[color:var(--color-fg)]">
-              Or try a sample repair
-            </h2>
-            <span className="text-sm text-[color:var(--color-muted)]">3 guided demos</span>
-          </div>
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        <section>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {demoList.map((demo) => (
               <DemoCard key={demo.id} demo={demo} />
             ))}
+            <PhotoUpload />
           </div>
         </section>
       </main>
 
       <footer className="border-t border-[color:var(--color-border)] bg-[color:var(--color-surface)]">
-        <div className="mx-auto flex max-w-6xl flex-col gap-2 px-6 py-8 text-sm text-[color:var(--color-muted)] sm:flex-row sm:items-center sm:justify-between">
+        <div className="mx-auto flex max-w-6xl flex-col gap-2 px-6 py-3 text-sm text-[color:var(--color-muted)] sm:flex-row sm:items-center sm:justify-between">
           <span>© Fixit · AI hackathon</span>
-          <span>Inspired by the spirit of iFixit — repair is freedom.</span>
         </div>
       </footer>
     </div>

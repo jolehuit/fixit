@@ -32,9 +32,7 @@ function JobInner({ jobId }: { jobId: string }) {
   const imgSrc = imageFailed ? (demo?.photo_url ?? null) : `/api/jobs/${jobId}/photo`;
   const ready = Boolean(videoUrl);
   const headline = demo ? demo.title : 'Diagnosing your repair';
-  const metaLine = demo
-    ? `${demo.category} · ${demo.difficulty} · ${demo.estimatedTime}`
-    : 'Live pipeline · Your photo';
+  const metaLine = demo ? demo.category : 'Live pipeline · Your photo';
 
   // Marker resolution: AI-detected (live) takes precedence over demo's static one.
   const marker = analyzeMarker ?? demo?.marker ?? null;
@@ -75,7 +73,7 @@ function JobInner({ jobId }: { jobId: string }) {
               <button
                 type="button"
                 onClick={() => setModalOpen(true)}
-                aria-label={`Watch repair video — ${marker.label}`}
+                aria-label={`Watch repair video: ${marker.label}`}
                 className="group absolute -translate-x-1/2 -translate-y-1/2 cursor-pointer animate-[fade-in_400ms_ease-out]"
                 style={{ left: `${marker.x}%`, top: `${marker.y}%` }}
               >
@@ -98,7 +96,7 @@ function JobInner({ jobId }: { jobId: string }) {
                   </svg>
                 </span>
                 <span className="pointer-events-none absolute left-1/2 top-full mt-3 -translate-x-1/2 whitespace-nowrap rounded-md bg-[color:var(--color-marker-strong)] px-2.5 py-1 text-xs font-semibold text-white opacity-0 shadow-md transition group-hover:opacity-100">
-                  {marker.label} — tap to watch
+                  {marker.label} · tap to watch
                 </span>
               </button>
             ) : null}
@@ -123,7 +121,7 @@ function JobInner({ jobId }: { jobId: string }) {
       {modalOpen && videoUrl ? (
         <VideoModal
           url={videoUrl}
-          title={marker ? `Repair — ${marker.label}` : 'Your repair video'}
+          title={marker ? `Repair · ${marker.label}` : 'Your repair video'}
           onClose={() => setModalOpen(false)}
         />
       ) : null}
@@ -139,7 +137,7 @@ export default function JobPage({ params }: { params: Promise<{ id: string }> })
       <header className="sticky top-0 z-10 border-b border-[color:var(--color-border)] bg-white/95 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
           <Link href="/" className="flex items-center gap-2">
-            <span className="text-lg font-semibold tracking-tight">fixit</span>
+            <img src="/logo.webp" alt="fixit" className="h-10 w-auto" />
           </Link>
           <Link
             href="/"

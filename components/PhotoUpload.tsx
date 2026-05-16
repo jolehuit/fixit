@@ -67,8 +67,6 @@ export function PhotoUpload() {
           throw new Error(`POST /api/run failed (${res.status}): ${text.slice(0, 200)}`);
         }
         const data = (await res.json()) as RunResponse;
-        // Photo is stored server-side by /api/run — the job page fetches it
-        // via /api/jobs/<id>/photo. No client-side storage required.
         router.push(`/job/${data.job_id}?mode=live`);
       } catch (err) {
         setPhase('error');
@@ -104,7 +102,7 @@ export function PhotoUpload() {
   const busy = phase === 'reading' || phase === 'uploading';
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex h-full flex-col gap-3">
       <button
         type="button"
         onClick={() => inputRef.current?.click()}
@@ -112,10 +110,10 @@ export function PhotoUpload() {
         onDragOver={onDragOver}
         onDragLeave={onDragLeave}
         disabled={busy}
-        className={`group relative flex w-full flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed bg-[color:var(--color-surface)] px-6 py-12 text-center transition disabled:cursor-not-allowed disabled:opacity-70 ${
+        className={`group flex flex-1 flex-col overflow-hidden rounded-xl border bg-white text-left transition hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-70 ${
           dragActive
-            ? 'border-[color:var(--color-accent)] bg-[color:var(--color-bubble-user)]'
-            : 'border-[color:var(--color-border-strong)] hover:border-[color:var(--color-accent)] hover:bg-[color:var(--color-bubble-user)]/40'
+            ? 'border-[color:var(--color-accent)]'
+            : 'border-[color:var(--color-border)] hover:border-[color:var(--color-border-strong)]'
         }`}
         aria-label="Upload a photo of the broken object"
       >
@@ -128,34 +126,35 @@ export function PhotoUpload() {
           disabled={busy}
         />
 
-        {!busy ? (
-          <>
-            <UploadIcon />
-            <div className="flex flex-col gap-1">
-              <span className="text-base font-semibold text-[color:var(--color-fg)]">
-                Drop a photo or click to browse
-              </span>
-              <span className="text-sm text-[color:var(--color-muted)]">
-                The live pipeline runs analyze → plan → render → animate → narrate → stitch in real
-                time.
-              </span>
-              <span className="mt-1 text-xs text-[color:var(--color-subtle)]">
-                PNG · JPG · WebP · up to 10 MB
-              </span>
-            </div>
-          </>
-        ) : (
-          <div className="flex flex-col items-center gap-2">
-            <span className="inline-flex items-end gap-1.5">
+        <div
+          className={`relative flex aspect-[3/2] w-full items-center justify-center overflow-hidden ${
+            dragActive ? 'bg-[color:var(--color-bubble-user)]' : 'bg-[color:var(--color-surface)]'
+          }`}
+        >
+          <div className="absolute inset-0 bg-gradient-to-br from-white via-[color:var(--color-surface)] to-[color:var(--color-border)]/40" />
+          {!busy ? (
+            <span className="relative transition group-hover:scale-105">
+              <UploadIcon />
+            </span>
+          ) : (
+            <span className="relative inline-flex items-end gap-1.5">
               <span className="h-2 w-2 animate-[dot_1.2s_ease-in-out_infinite] rounded-full bg-[color:var(--color-accent)]" />
               <span className="h-2 w-2 animate-[dot_1.2s_ease-in-out_-0.2s_infinite] rounded-full bg-[color:var(--color-accent)]" />
               <span className="h-2 w-2 animate-[dot_1.2s_ease-in-out_-0.4s_infinite] rounded-full bg-[color:var(--color-accent)]" />
             </span>
-            <span className="text-sm font-medium text-[color:var(--color-fg)]">
-              {phase === 'reading' ? 'Reading your photo…' : 'Starting the live pipeline…'}
-            </span>
-          </div>
-        )}
+          )}
+        </div>
+
+        <div className="flex flex-1 flex-col gap-1.5 px-4 py-3">
+          <span className="text-xs font-semibold uppercase tracking-wider text-[color:var(--color-accent)]">
+            Your photo
+          </span>
+          <h3 className="text-base font-semibold text-[color:var(--color-fg)]">Upload your own</h3>
+          <span className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-[color:var(--color-accent)] transition group-hover:gap-2">
+            {busy ? (phase === 'reading' ? 'Reading…' : 'Starting…') : 'Choose a photo'}
+            <span aria-hidden>→</span>
+          </span>
+        </div>
       </button>
 
       {phase === 'error' && errorMsg ? (
@@ -174,8 +173,8 @@ function UploadIcon() {
       aria-hidden="true"
       role="img"
       viewBox="0 0 24 24"
-      width="36"
-      height="36"
+      width="60"
+      height="60"
       fill="none"
       stroke="currentColor"
       strokeWidth="1.5"

@@ -34,9 +34,6 @@ export default function DemoIntroPage({ params }: { params: Promise<{ id: string
   const demoId = parsed.data;
   const demo = demos[demoId];
 
-  // Demo cards now run the SAME live pipeline as user uploads. We fetch the
-  // pre-shot photo, encode it as a data URL (so OpenAI can read its bytes
-  // rather than try to fetch localhost), then POST /api/run live.
   const start = async () => {
     setErrorMsg(null);
     setPhase('encoding');
@@ -65,8 +62,6 @@ export default function DemoIntroPage({ params }: { params: Promise<{ id: string
         throw new Error(`POST /api/run failed (${runRes.status}): ${text.slice(0, 200)}`);
       }
       const data = (await runRes.json()) as RunResponse;
-      // Photo is stored server-side by /api/run — the job page fetches it
-      // via /api/jobs/<id>/photo. No client-side storage required.
       router.push(`/job/${data.job_id}?mode=live&demo=${demoId}`);
     } catch (err) {
       setPhase('error');
@@ -77,11 +72,11 @@ export default function DemoIntroPage({ params }: { params: Promise<{ id: string
   const busy = phase === 'encoding' || phase === 'starting';
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="flex min-h-screen flex-col bg-white">
       <header className="border-b border-[color:var(--color-border)]">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
           <Link href="/" className="flex items-center gap-2">
-            <span className="text-lg font-semibold tracking-tight">fixit</span>
+            <img src="/logo.webp" alt="fixit" className="h-10 w-auto" />
           </Link>
           <Link
             href="/"
@@ -92,64 +87,66 @@ export default function DemoIntroPage({ params }: { params: Promise<{ id: string
         </div>
       </header>
 
-      <main className="mx-auto max-w-3xl px-6 py-16 sm:py-24">
-        <div className="flex flex-col items-center gap-8 text-center">
-          <span className="text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--color-accent)]">
-            {demo.category} · {demo.difficulty}
-          </span>
-          <h1 className="max-w-xl text-balance text-3xl font-bold leading-tight text-[color:var(--color-fg)] sm:text-4xl">
-            {demo.title}
-          </h1>
-          <p className="max-w-lg text-[color:var(--color-muted)]">{demo.intro}</p>
+      <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col items-center justify-center gap-4 px-6 py-6 text-center">
+        <span className="text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--color-accent)]">
+          {demo.category}
+        </span>
+        <h1 className="max-w-xl text-balance text-2xl font-bold leading-tight text-[color:var(--color-fg)] sm:text-3xl">
+          {demo.title}
+        </h1>
 
-          <div className="relative mt-2 aspect-[4/3] w-full max-w-md overflow-hidden rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-surface)]">
-            {imageFailed ? (
-              <div className="flex h-full w-full items-center justify-center">
-                <span aria-hidden className="text-7xl opacity-70">
-                  {demo.emoji}
-                </span>
-              </div>
-            ) : (
-              // biome-ignore lint/performance/noImgElement: native img keeps the onError fallback path simple
-              <img
-                src={demo.photo_url}
-                alt={demo.short}
-                onError={() => setImageFailed(true)}
-                className="h-full w-full animate-[fade-in_400ms_ease-out] object-cover"
-              />
-            )}
-            {busy ? (
-              <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-3 border-t border-[color:var(--color-border)] bg-white/95 p-3 text-sm backdrop-blur">
-                <span className="inline-flex items-end gap-1">
-                  <span className="h-1.5 w-1.5 animate-[dot_1.2s_ease-in-out_infinite] rounded-full bg-[color:var(--color-accent)]" />
-                  <span className="h-1.5 w-1.5 animate-[dot_1.2s_ease-in-out_-0.2s_infinite] rounded-full bg-[color:var(--color-accent)]" />
-                  <span className="h-1.5 w-1.5 animate-[dot_1.2s_ease-in-out_-0.4s_infinite] rounded-full bg-[color:var(--color-accent)]" />
-                </span>
-                <span className="text-[color:var(--color-fg)]">
-                  {phase === 'encoding' ? 'Preparing photo' : 'Starting pipeline'}
-                </span>
-              </div>
-            ) : null}
-          </div>
-
-          <button
-            type="button"
-            onClick={start}
-            disabled={busy}
-            className="inline-flex items-center gap-2 rounded-md bg-[color:var(--color-accent)] px-6 py-3 text-base font-semibold text-white shadow-sm transition hover:bg-[color:var(--color-accent-hover)] disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {busy ? 'Starting…' : 'Run the diagnosis'}
-          </button>
-          <p className="text-xs text-[color:var(--color-subtle)]">
-            Same pipeline as the upload — uses our pre-shot photo + voice transcript.
-          </p>
-          {phase === 'error' && errorMsg ? (
-            <div className="w-full rounded-md border border-[color:var(--color-danger)]/40 bg-[color:var(--color-danger)]/5 px-4 py-3 text-sm text-[color:var(--color-danger)]">
-              <strong className="font-semibold">Couldn't start the pipeline.</strong>
-              <span className="ml-1">{errorMsg}</span>
+        <div className="relative aspect-[4/3] w-full max-w-sm overflow-hidden rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-surface)]">
+          {imageFailed ? (
+            <div className="flex h-full w-full items-center justify-center">
+              <span aria-hidden className="text-7xl opacity-70">
+                {demo.emoji}
+              </span>
+            </div>
+          ) : (
+            // biome-ignore lint/performance/noImgElement: native img keeps the onError fallback path simple
+            <img
+              src={demo.photo_url}
+              alt={demo.short}
+              onError={() => setImageFailed(true)}
+              className="h-full w-full object-cover"
+            />
+          )}
+          {busy ? (
+            <div className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-3 border-t border-[color:var(--color-border)] bg-white/95 p-3 text-sm backdrop-blur">
+              <span className="inline-flex items-end gap-1">
+                <span className="h-1.5 w-1.5 animate-[dot_1.2s_ease-in-out_infinite] rounded-full bg-[color:var(--color-accent)]" />
+                <span className="h-1.5 w-1.5 animate-[dot_1.2s_ease-in-out_-0.2s_infinite] rounded-full bg-[color:var(--color-accent)]" />
+                <span className="h-1.5 w-1.5 animate-[dot_1.2s_ease-in-out_-0.4s_infinite] rounded-full bg-[color:var(--color-accent)]" />
+              </span>
+              <span className="text-[color:var(--color-fg)]">
+                {phase === 'encoding' ? 'Preparing photo' : 'Starting pipeline'}
+              </span>
             </div>
           ) : null}
         </div>
+
+        <button
+          type="button"
+          onClick={start}
+          disabled={busy}
+          className="inline-flex items-center gap-2 rounded-md bg-[color:var(--color-accent)] px-6 py-3 text-base font-semibold text-white shadow-sm transition hover:bg-[color:var(--color-accent-hover)] disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {busy ? (
+            'Starting…'
+          ) : (
+            <>
+              Troubleshoot
+              <span aria-hidden>→</span>
+            </>
+          )}
+        </button>
+
+        {phase === 'error' && errorMsg ? (
+          <div className="w-full max-w-md rounded-md border border-[color:var(--color-danger)]/40 bg-[color:var(--color-danger)]/5 px-4 py-3 text-sm text-[color:var(--color-danger)]">
+            <strong className="font-semibold">Couldn't start the pipeline.</strong>
+            <span className="ml-1">{errorMsg}</span>
+          </div>
+        ) : null}
       </main>
     </div>
   );
