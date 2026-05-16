@@ -1,0 +1,35 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "fluid": true,
+  "functions": {
+    "app/api/stitch/route.ts": {
+      "memory": 3009,
+      "maxDuration": 800
+    },
+    "app/api/run/route.ts": {
+      "memory": 2048,
+      "maxDuration": 800
+    },
+    "app/api/animate-step/route.ts": {
+      "maxDuration": 300
+    },
+    "app/api/render-keyframe/route.ts": {
+      "maxDuration": 120
+    },
+    "app/api/narrate/route.ts": {
+      "maxDuration": 60
+    },
+    "app/api/analyze/route.ts": {
+      "maxDuration": 60
+    },
+    "app/api/plan/route.ts": {
+      "maxDuration": 120
+    },
+    "app/api/clarify/route.ts": {
+      "maxDuration": 30
+    },
+    "app/api/stream/[jobId]/route.ts": {
+      "maxDuration": 800
+    }
+  }
+}
