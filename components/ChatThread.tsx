@@ -36,6 +36,10 @@ export function ChatThread({
   const phaseRef = useRef<'asking' | 'preparing' | 'done'>('asking');
   const onVideoReadyRef = useRef(onVideoReady);
   onVideoReadyRef.current = onVideoReady;
+  // Persistent flags so React StrictMode (which runs effects twice in dev)
+  // can't kick off two parallel scripts and produce duplicate messages.
+  const scriptStartedRef = useRef(false);
+  const saidAlmostRef = useRef(false);
 
   // ---- SSE ingestion (silent, only watches for plan + final video) ----
   useEffect(() => {
@@ -69,13 +73,25 @@ export function ChatThread({
 
   // ---- Conversation script ----
   useEffect(() => {
+    // Guard against double-run in React StrictMode (dev).
+    if (scriptStartedRef.current) return;
+    scriptStartedRef.current = true;
+
     let cancelled = false;
     const nextId = () => ++idRef.current;
     const labels = demoLabels[demoId];
 
     const push = (m: MessageInput) => {
       if (cancelled) return;
-      setMessages((prev) => [...prev, { ...m, id: nextId() }]);
+      setMessages((prev) => {
+        // Skip if the same bot text is already the latest message — avoids
+        // any accidental duplicate (e.g. waiting loop or replayed effect).
+        if (m.kind === 'bot' && prev.length > 0) {
+          const last = prev[prev.length - 1];
+          if (last.kind === 'bot' && last.text === m.text) return prev;
+        }
+        return [...prev, { ...m, id: nextId() }];
+      });
     };
     const removeTyping = () => {
       setMessages((prev) => prev.filter((m) => m.kind !== 'typing'));
@@ -156,13 +172,22 @@ export function ChatThread({
         await reveal();
         return;
       }
+      // Keep a typing indicator visible while we wait. Drop in a single
+      // "Almost there…" cue after ~10s if the video still isn't ready.
+      push({ kind: 'typing' });
       let waited = 0;
       while (!cancelled && !stitchedRef.current && waited < 90000) {
-        await sleep(6000);
-        waited += 6000;
-        if (cancelled || stitchedRef.current) break;
-        await botSay('Almost there…');
+        await sleep(1000);
+        waited += 1000;
+        if (!cancelled && !saidAlmostRef.current && !stitchedRef.current && waited >= 10000) {
+          saidAlmostRef.current = true;
+          removeTyping();
+          await botSay('Almost there…');
+          if (cancelled || stitchedRef.current) break;
+          push({ kind: 'typing' });
+        }
       }
+      removeTyping();
       if (stitchedRef.current) await reveal();
     })();
 

@@ -77,24 +77,25 @@ function JobInner({ jobId }: { jobId: string }) {
                 className="group absolute -translate-x-1/2 -translate-y-1/2 cursor-pointer animate-[fade-in_400ms_ease-out]"
                 style={{ left: `${marker.x}%`, top: `${marker.y}%` }}
               >
-                <span className="relative flex h-6 w-6 items-center justify-center">
-                  <span className="absolute inline-flex h-full w-full animate-[ping-soft_1.8s_ease-out_infinite] rounded-full bg-[color:var(--color-accent)] opacity-70" />
-                  <span className="absolute inline-flex h-full w-full animate-[ping-soft_1.8s_ease-out_0.6s_infinite] rounded-full bg-[color:var(--color-accent)] opacity-40" />
-                  <span className="relative inline-flex h-3.5 w-3.5 items-center justify-center rounded-full bg-[color:var(--color-accent)] ring-2 ring-white shadow-md transition group-hover:scale-110">
-                    <svg
-                      aria-hidden="true"
-                      role="img"
-                      viewBox="0 0 12 12"
-                      width="8"
-                      height="8"
-                      fill="white"
-                    >
-                      <title>Play</title>
-                      <path d="M3 2l7 4-7 4V2z" />
-                    </svg>
-                  </span>
+                <span
+                  className="relative inline-flex h-12 w-12 items-center justify-center rounded-full bg-[color:var(--color-marker-strong)] text-white ring-[5px] ring-white animate-[marker-beat_1.3s_ease-in-out_infinite] transition group-hover:scale-110"
+                  style={{
+                    boxShadow: '0 0 0 2px rgba(0, 0, 0, 0.45), 0 8px 24px rgba(220, 38, 38, 0.85)',
+                  }}
+                >
+                  <svg
+                    aria-hidden="true"
+                    role="img"
+                    viewBox="0 0 12 12"
+                    width="16"
+                    height="16"
+                    fill="white"
+                  >
+                    <title>Play</title>
+                    <path d="M3 2l7 4-7 4V2z" />
+                  </svg>
                 </span>
-                <span className="pointer-events-none absolute left-1/2 top-full mt-3 -translate-x-1/2 whitespace-nowrap rounded-md bg-[color:var(--color-fg)] px-2.5 py-1 text-xs font-medium text-white opacity-0 shadow-md transition group-hover:opacity-100">
+                <span className="pointer-events-none absolute left-1/2 top-full mt-3 -translate-x-1/2 whitespace-nowrap rounded-md bg-[color:var(--color-marker-strong)] px-2.5 py-1 text-xs font-semibold text-white opacity-0 shadow-md transition group-hover:opacity-100">
                   {marker.label} — tap to watch
                 </span>
               </button>

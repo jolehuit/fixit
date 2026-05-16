@@ -9,6 +9,8 @@
   --color-accent-hover: #0052a3;
   --color-warn: #b45309;
   --color-danger: #b91c1c;
+  --color-marker: #ef4444;
+  --color-marker-strong: #dc2626;
   --color-card: #ffffff;
   --color-border: #e5e7eb;
   --color-border-strong: #d1d5db;
@@ -82,5 +84,15 @@ body {
   100% {
     transform: scale(2.4);
     opacity: 0;
+  }
+}
+
+@keyframes marker-beat {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.12);
   }
 }
