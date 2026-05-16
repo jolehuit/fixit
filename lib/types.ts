@@ -315,6 +315,33 @@ export type StitchRequest = z.infer<typeof StitchRequest>;
  * when the user clicks a known demo card. Free uploads omit it and trigger
  * either classify→cache or live based on configuration.
  */
+// ---------- Demo cache manifest ----------
+
+/**
+ * Pre-baked artifact pointer for a single cached demo step. Produced by
+ * `scripts/build-demo-cache.mjs` and consumed by /api/run's `runCached`.
+ */
+export const CachedStep = z.object({
+  step_number: z.number().int().positive(),
+  video_url: z.string().url(),
+  audio_url: z.string().url(),
+  duration_seconds: z.number().positive(),
+  keyframe_start_url: z.string().url().optional(),
+  keyframe_end_url: z.string().url().optional(),
+});
+export type CachedStep = z.infer<typeof CachedStep>;
+
+export const DemoManifest = z.object({
+  demo_id: DemoId,
+  /** Public URL of the reference photo (also rendered on the job page). */
+  photo_url: z.string().url(),
+  generated_at: z.string(),
+  analyze: AnalyzeResult,
+  plan: RepairPlan,
+  steps: z.array(CachedStep).min(1),
+});
+export type DemoManifest = z.infer<typeof DemoManifest>;
+
 export const RunRequest = z.object({
   photo_url: z.string().url(),
   transcript: z.string().optional(),

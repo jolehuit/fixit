@@ -1,0 +1,16 @@
+{
+  "object": "Brand: Apple ; Model line: iPhone ; Model code or variant: iPhone 12 or iPhone 13 (6.1 inch OLED) ; Generation/Year: 2020-2022 ; Color/Finish: Black aluminum frame with rear glass ; Material: Aluminum + glass ; Visible markings: Apple logo on the back ; Distinguishing features: Flat-edge frame, Face ID notch, lightning port",
+  "category": "electronics",
+  "problem_visual": "Defect: Spider-web crack across the OLED front glass with localized impact point ; located at: Upper-center quadrant of the display ; severity: Major cosmetic + touch reliability risk ; visible signs: Multiple radiating cracks from a central point, glass shards lifted but not detached, display still appears to power on",
+  "damage_extent": "functional",
+  "repair_feasibility": "home_advanced",
+  "estimated_skill_level": "Intermediate — requires patience and tiny tools",
+  "safety_warnings": [
+    "Power off the phone completely before opening",
+    "Disconnect the battery flex before any other internal work",
+    "Wear safety glasses — broken glass can flake off the display",
+    "Work on a clean, lit surface to keep track of tiny screws"
+  ],
+  "uncertainties": [],
+  "defect_marker": { "x": 50, "y": 42, "label": "Cracked screen impact point" }
+}

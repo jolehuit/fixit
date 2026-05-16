@@ -1,0 +1,15 @@
+{
+  "object": "Brand: Unbranded ; Model line: Single-handle mixer tap ; Model code or variant: Standard kitchen faucet ; Generation/Year: Modern (2010s-2020s) ; Color/Finish: Brushed chrome ; Material: Chromed brass body with ceramic cartridge ; Visible markings: None visible ; Distinguishing features: Single-lever handle, swivel spout, ceramic disc cartridge",
+  "category": "plumbing",
+  "problem_visual": "Defect: Constant slow drip from the spout, audible and visible water bead forming every few seconds ; located at: The base of the swivel spout ; severity: Functional — water waste, will worsen ; visible signs: Water droplet pooling at the spout aerator, calcium streak on the chrome below, cabinet floor under the sink shows residual moisture",
+  "damage_extent": "functional",
+  "repair_feasibility": "home_easy",
+  "estimated_skill_level": "Beginner-friendly — no soldering required",
+  "safety_warnings": [
+    "Always shut off the hot AND cold supply valves under the sink before opening the tap",
+    "Place a towel in the sink to catch dropped parts",
+    "Do not over-tighten the new cartridge — you can crack the brass body"
+  ],
+  "uncertainties": [],
+  "defect_marker": { "x": 50, "y": 62, "label": "Drip from spout base" }
+}

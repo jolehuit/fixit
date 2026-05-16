@@ -1,0 +1,41 @@
+{
+  "object": "Brand: Decathlon ; Model line: Rockrider ; Model code or variant: Vintage series, likely 300 or 500 range ; Generation/Year: Late 1990s to early 2000s ; Color/Finish: Two-tone blue and white frame with black components ; Material: Steel or aluminum ; Visible markings: DECATHLON on the down tube, ROCKRIDER on the top tube ; Distinguishing features: Front suspension fork, V-brakes, 26-inch wheels, toe-clip pedals, black bottle cage",
+  "category": "vehicle",
+  "problem_visual": "Defect: Completely flat front tire, likely caused by a punctured inner tube ; located at: Front wheel, mainly at the bottom contact patch touching the ground ; severity: Major, the bicycle is not safely rideable ; visible signs: The front tire is crushed under the rim, the sidewall is folded against the ground, and the rear tire appears normally inflated",
+  "damage_extent": "functional",
+  "repair_feasibility": "home_easy",
+  "estimated_skill_level": "Beginner-friendly with basic tools",
+  "safety_warnings": [
+    "Stabilize the bicycle before starting the repair",
+    "Fully deflate any remaining air before removing the tire",
+    "Keep fingers away from sharp debris when inspecting the tire",
+    "Test the front brake before riding after reassembly"
+  ],
+  "uncertainties": [
+    {
+      "field": "TireDimensions",
+      "question": "What exact tire size is written on the front tire sidewall? (— used to pick a compatible inner tube)",
+      "purpose": "To select the correct replacement inner tube diameter and width.",
+      "instruction": "Read the molded size marking on the sidewall of the front tire, for example 26 x 1.95.",
+      "placeholder": "Example: 26 x 1.95",
+      "options": ["26 x 1.75 to 1.95", "26 x 2.00 to 2.20", "I cannot read the size"]
+    },
+    {
+      "field": "TireCondition",
+      "question": "Does the front tire show any visible tear, cut, or hole on the tread or sidewall? (— used to decide if only the tube or also the outer tire must be replaced)",
+      "purpose": "To determine whether only the inner tube must be replaced or whether the outer tire must also be replaced.",
+      "instruction": "Inspect the full outer surface of the front tire, including the tread and both sidewalls.",
+      "placeholder": "Describe the visible tire condition",
+      "options": ["The tire looks intact", "The tire has a visible cut or tear", "I cannot confirm without removing the tire"]
+    },
+    {
+      "field": "ValveType",
+      "question": "What valve type is installed on the front inner tube? (— used to match the replacement tube and pump head)",
+      "purpose": "To ensure the replacement inner tube and pump are compatible.",
+      "instruction": "Look at the front wheel valve and identify whether it is a Schrader valve, a Presta valve, or if it is unclear.",
+      "placeholder": "Example: Schrader valve",
+      "options": ["Schrader valve", "Presta valve", "I cannot identify the valve type"]
+    }
+  ],
+  "defect_marker": { "x": 75, "y": 75, "label": "Flat / crushed front tire" }
+}

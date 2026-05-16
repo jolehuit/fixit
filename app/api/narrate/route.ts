@@ -35,16 +35,28 @@ function wavDurationSeconds(buf: Buffer, fallbackText: string): number {
     // Some encoders insert extra chunks (e.g. 'LIST', 'fact') before 'data'.
     let offset = 36;
     let dataSize = 0;
+    let dataChunkStart = -1;
     while (offset + 8 <= buf.length) {
       const chunkId = buf.toString('ascii', offset, offset + 4);
       const chunkSize = buf.readUInt32LE(offset + 4);
       if (chunkId === 'data') {
         dataSize = chunkSize;
+        dataChunkStart = offset + 8;
         break;
       }
       offset += 8 + chunkSize;
     }
-    if (!dataSize) throw new Error('data chunk not found');
+    if (dataChunkStart < 0) throw new Error('data chunk not found');
+
+    // Streaming-WAV fallback: Gradium (and many real-time encoders) emit
+    // RIFF/data sizes of 0xFFFFFFFF when the final length is unknown at
+    // header-write time. Trust the declared size only when it fits in the
+    // actual buffer; otherwise derive it from buffer.length.
+    const trailingBytes = buf.length - dataChunkStart;
+    if (dataSize === 0xffffffff || dataSize === 0 || dataSize > trailingBytes) {
+      dataSize = trailingBytes;
+    }
+    if (dataSize <= 0) throw new Error('data chunk is empty');
 
     const seconds = dataSize / byteRate;
     if (!Number.isFinite(seconds) || seconds <= 0) throw new Error('non-positive duration');

@@ -1,0 +1,107 @@
+{
+  "problem_summary": "Replacing a cracked OLED display on an iPhone 12/13 with a like-for-like assembly.",
+  "difficulty": "hard",
+  "total_duration_min": 45,
+  "estimated_cost_eur": { "parts_low": 80, "parts_high": 180 },
+  "safety_pre_check": [
+    "Power off the iPhone completely.",
+    "Disconnect the battery flex before any other internal work.",
+    "Wear safety glasses — broken glass can flake off the display.",
+    "Use a magnetic mat to keep track of the tiny pentalobe screws."
+  ],
+  "parts_summary": [
+    { "name": "Replacement OLED display assembly", "quantity": 1, "specification": "Genuine or aftermarket OEM-grade, matching the exact model number" },
+    { "name": "Display adhesive strip", "quantity": 1, "specification": "Pre-cut adhesive matching the model" }
+  ],
+  "tools_summary": [
+    { "name": "Pentalobe P2 screwdriver", "required": true, "specification": "0.8 mm pentalobe (bottom edge screws)" },
+    { "name": "Tri-point Y000 screwdriver", "required": true, "specification": "For internal flex brackets" },
+    { "name": "Suction cup", "required": true },
+    { "name": "Plastic spudger", "required": true },
+    { "name": "Hair dryer or heat pad", "required": false, "specification": "To soften the perimeter adhesive" }
+  ],
+  "scene_lock": {
+    "subject": "An iPhone 12/13 with a black aluminum frame and a cracked OLED display on the front.",
+    "environment": "Clean lit workbench with a magnetic parts tray, anti-static mat, and bright overhead daylight LED panel.",
+    "hands_style": "Adult hands wearing fitted blue nitrile gloves with anti-static fingertips.",
+    "style": "Photorealistic instructional video style with crisp macro detail and clean even lighting.",
+    "color_palette": "Charcoal phone, blue gloves, white workbench, silver tools, neutral overhead lighting.",
+    "shot_default": "macro",
+    "camera_default": "static",
+    "consistency_phrases": [
+      "Keep the iPhone identity (color, model, frame style) consistent across all shots",
+      "Show the cracked display only until the screen is replaced",
+      "Maintain the clean workbench background"
+    ],
+    "negative_cues": [
+      "extra text inside the image",
+      "watermarks",
+      "cartoon style",
+      "deformed hands",
+      "Android phone",
+      "different iPhone model"
+    ]
+  },
+  "steps": [
+    {
+      "step_number": 1,
+      "title": "Power off and remove the bottom pentalobe screws",
+      "description": "Power the iPhone down completely, then unscrew the two pentalobe P2 screws on either side of the Lightning port at the bottom edge.",
+      "parts_needed": [],
+      "tools_needed": ["Pentalobe P2 screwdriver"],
+      "duration_seconds": 25,
+      "shot_type": "macro",
+      "camera_movement": "static",
+      "motion_pacing": "slow_methodical",
+      "subject_focus": "The bottom edge of the iPhone and the two pentalobe screws.",
+      "visual_prompt_start": "Scene: Clean lit workbench. Subject: The iPhone lies face-up. A blue-gloved hand places a P2 pentalobe screwdriver into the small screw on the left side of the Lightning port. Details: Photorealistic macro, sharp screw threading visible, even overhead light.",
+      "visual_prompt_end": "Scene: Same workbench. Subject: Both bottom pentalobe screws have been removed and placed on the magnetic tray next to the phone. Details: Photorealistic, screws clearly visible on the tray.",
+      "motion_prompt": "Animate the gloved hand carefully unscrewing first the left, then the right pentalobe screw with controlled torque, lifting each free and placing it on the magnetic tray.",
+      "narration": "Power off the iPhone, then remove the two pentalobe screws on either side of the Lightning port.",
+      "subtitle": "Remove the bottom pentalobe screws.",
+      "safety_note": "Use the correct P2 bit — the wrong bit will strip the head.",
+      "success_criteria": "Both screws are out of the chassis and on the magnetic tray.",
+      "common_mistake": "Stripping the screw heads by using a Phillips bit."
+    },
+    {
+      "step_number": 2,
+      "title": "Lift the screen with a suction cup",
+      "description": "Stick a suction cup just above the home indicator and pull gently while sliding a plastic spudger around the perimeter to break the adhesive.",
+      "parts_needed": [],
+      "tools_needed": ["Suction cup", "Plastic spudger"],
+      "duration_seconds": 35,
+      "shot_type": "close-up",
+      "camera_movement": "subtle_zoom_in",
+      "motion_pacing": "controlled",
+      "subject_focus": "The suction cup pulling the cracked screen up.",
+      "visual_prompt_start": "Scene: Same workbench. Subject: A black suction cup pressed firmly against the cracked OLED, just above the bottom edge. Details: Photorealistic macro, crack pattern still clearly visible.",
+      "visual_prompt_end": "Scene: Same workbench. Subject: The screen is lifted a few millimeters off the chassis on the bottom edge while a plastic spudger slides along the side to break the adhesive seal. Details: Photorealistic, visible gap between screen and frame.",
+      "motion_prompt": "Animate the suction cup being lifted gently while the spudger slides slowly along the perimeter, gradually opening the screen away from the chassis without flexing it.",
+      "narration": "Stick the suction cup near the bottom edge, lift gently, and run a plastic spudger around to break the adhesive.",
+      "subtitle": "Lift the screen with suction.",
+      "safety_note": "Open the phone like a book — never pull the screen fully off, the flex cables are still connected at the top.",
+      "success_criteria": "The screen lifts cleanly away from the chassis without cracking further.",
+      "common_mistake": "Pulling the screen straight up and tearing the display flex cables."
+    },
+    {
+      "step_number": 3,
+      "title": "Disconnect the flex cables and install the new display",
+      "description": "Remove the small Y000 bracket over the display connectors, gently lift the flex cables off the logic board, then reverse the process with the new screen.",
+      "parts_needed": ["Replacement OLED display assembly"],
+      "tools_needed": ["Tri-point Y000 screwdriver", "Plastic spudger"],
+      "duration_seconds": 50,
+      "shot_type": "macro",
+      "camera_movement": "static",
+      "motion_pacing": "slow_methodical",
+      "subject_focus": "The display flex connectors and the Y000 bracket.",
+      "visual_prompt_start": "Scene: Same workbench. Subject: The phone is opened like a book, exposing the display flex connectors covered by a small metal bracket secured with tri-point Y000 screws. Details: Photorealistic macro, every screw and connector crisp.",
+      "visual_prompt_end": "Scene: Same workbench. Subject: The new replacement OLED display has been seated into the chassis, the flex connectors clicked back onto the logic board, and the bracket reinstalled. Details: Photorealistic, new screen perfectly aligned, no cracks visible.",
+      "motion_prompt": "Animate the Y000 screws being removed one by one, the bracket lifted away, the flex cables gently popped off the board with a spudger, then the new screen connected in reverse order.",
+      "narration": "Unscrew the bracket over the display connectors, pop the flex cables off the logic board, swap in the new screen, then reverse the process to reassemble.",
+      "subtitle": "Swap the display assembly.",
+      "safety_note": "Never reconnect a flex cable that isn't perfectly aligned — you'll short the board.",
+      "success_criteria": "The new screen powers on and shows a clean undamaged image.",
+      "common_mistake": "Forgetting to reseat the EMI bracket — the phone won't be water-resistant anymore."
+    }
+  ]
+}

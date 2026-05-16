@@ -13,13 +13,14 @@
  */
 
 import { NextResponse } from 'next/server';
-import { getDemoCacheUrls, isCachedDemo } from '@/lib/demo-cache';
+import { getDemoManifestUrl, isCachedDemo } from '@/lib/demo-cache';
 import { closeJob, createJob, emit, newJobId, setPhoto, waitForClarify } from '@/lib/jobs';
 import {
-  AnalyzeResult,
+  type AnalyzeResult,
   type ClarifyAnswer,
   type DemoId,
-  RepairPlan,
+  DemoManifest,
+  type RepairPlan,
   type RepairStep,
   RunRequest,
   RunResponse,
@@ -351,34 +352,27 @@ async function runLive(jobId: string, input: { photo_url: string; transcript?: s
   }
 }
 
-// ---------- Cached path (replay externally-hosted hand-crafted outputs) ----
+// ---------- Cached path (replay pre-baked manifest) -----------------------
 
 /**
- * Replay un parcours pipeline "comme si" c'était live, depuis le cache externe.
+ * Replay a believable live pipeline timeline from a pre-baked DemoManifest.
  *
- * Fetch les JSON sur Vercel Blob (URLs publiques), Zod-valide, puis émet les
- * events SSE avec setTimeout absolu depuis t=0 selon un timing crédible
- * (~120s pour ~8 steps). La vidéo finale référence directement l'URL Blob du
- * MP4 cached.
- *
- * Les URLs des keyframes/animations intermédiaires sont des placeholders —
- * le composant LiveProgress affiche juste les chips (✓ frames / anim / voice)
- * sans jamais fetch ces URLs.
+ * Fetches a single manifest.json on Blob (CDN-cached), Zod-validates, then
+ * emits SSE events with absolute setTimeout offsets so the run "feels" live
+ * (~120s for ~6 steps). Per-step events use the REAL Blob URLs from the
+ * manifest, so the chapter player opens with the cached video + audio when
+ * the user clicks the CTA.
  */
 async function runCached(jobId: string, demoId: DemoId) {
-  const urls = getDemoCacheUrls(demoId);
+  const manifestUrl = getDemoManifestUrl(demoId);
 
   try {
-    // Fetch & validate the two JSON payloads. CDN-cached on Blob so very fast.
-    const [analyzeRes, planRes] = await Promise.all([
-      fetch(urls.analyzeUrl, { cache: 'no-store' }),
-      fetch(urls.planUrl, { cache: 'no-store' }),
-    ]);
-    if (!analyzeRes.ok) throw new Error(`analyze.json ${analyzeRes.status}`);
-    if (!planRes.ok) throw new Error(`plan.json ${planRes.status}`);
-
-    const analyze = AnalyzeResult.parse(await analyzeRes.json());
-    const plan = RepairPlan.parse(await planRes.json());
+    const manifestRes = await fetch(manifestUrl, { cache: 'no-store' });
+    if (!manifestRes.ok) throw new Error(`manifest ${manifestRes.status}`);
+    const manifest = DemoManifest.parse(await manifestRes.json());
+    const analyze = manifest.analyze;
+    const plan = manifest.plan;
+    const stepsById = new Map(manifest.steps.map((s) => [s.step_number, s]));
 
     // ── Timing budget (ms) ──
     const T_initLog = 0;
@@ -464,54 +458,68 @@ async function runCached(jobId: string, demoId: DemoId) {
       }),
     );
 
-    // Per-step events (placeholders — UI consumes only step + url metadata).
+    // Per-step events — use REAL Blob URLs from the manifest so the
+    // chapter player can open with the cached video + audio.
     for (let i = 0; i < N; i++) {
       const step = plan.steps[i];
+      const cached = stepsById.get(step.step_number);
       const base = T_stepStart + i * STEP_DURATION;
-      const placeholder = (kind: string) =>
-        `https://placehold.co/1280x720/png?text=step-${step.step_number}-${kind}`;
+      const startUrl = cached?.keyframe_start_url ?? cached?.video_url;
+      const endUrl = cached?.keyframe_end_url ?? cached?.video_url;
 
-      emitAt(base + 0, () =>
-        emit(jobId, {
-          type: 'keyframe_done',
-          step: step.step_number,
-          kind: 'start',
-          url: placeholder('start'),
-        }),
-      );
-      emitAt(base + 2_000, () =>
-        emit(jobId, {
-          type: 'keyframe_done',
-          step: step.step_number,
-          kind: 'end',
-          url: placeholder('end'),
-        }),
-      );
-      emitAt(base + 4_500, () =>
-        emit(jobId, {
-          type: 'animation_done',
-          step: step.step_number,
-          url: placeholder('anim'),
-        }),
-      );
-      emitAt(base + 5_500, () =>
-        emit(jobId, {
-          type: 'narration_done',
-          step: step.step_number,
-          url: 'https://placehold.co/1x1.wav',
-        }),
-      );
+      if (startUrl) {
+        emitAt(base + 0, () =>
+          emit(jobId, {
+            type: 'keyframe_done',
+            step: step.step_number,
+            kind: 'start',
+            url: startUrl,
+          }),
+        );
+      }
+      if (endUrl) {
+        emitAt(base + 2_000, () =>
+          emit(jobId, {
+            type: 'keyframe_done',
+            step: step.step_number,
+            kind: 'end',
+            url: endUrl,
+          }),
+        );
+      }
+      if (cached) {
+        emitAt(base + 4_500, () =>
+          emit(jobId, {
+            type: 'animation_done',
+            step: step.step_number,
+            url: cached.video_url,
+          }),
+        );
+        emitAt(base + 5_500, () =>
+          emit(jobId, {
+            type: 'narration_done',
+            step: step.step_number,
+            url: cached.audio_url,
+          }),
+        );
+      }
     }
 
+    // Replace the legacy stitch step with the chapter-player handoff.
     emitAt(T_stitchStartLog, () =>
       emit(jobId, {
         type: 'log',
-        message: '⠋ Montage ffmpeg · concat + narration + sous-titres FR…',
+        message: '⠋ Assemblage chapter player…',
         transient: true,
       }),
     );
-    emitAt(T_stitchDone, () => emit(jobId, { type: 'stitch_done', video_url: urls.videoUrl }));
-    emitAt(T_finalLog, () => emit(jobId, { type: 'log', message: '✓ Vidéo finale prête' }));
+    emitAt(T_stitchDone, () => emit(jobId, { type: 'chapters_ready' }));
+    emitAt(T_finalLog, () =>
+      emit(jobId, {
+        type: 'log',
+        message: `✓ ${N} chapters ready · loop-on-step interactive tutorial`,
+      }),
+    );
     emitAt(T_done, () => {
       emit(jobId, { type: 'done' });
       closeJob(jobId);

@@ -1,0 +1,105 @@
+{
+  "problem_summary": "Replacing the ceramic cartridge in a single-lever kitchen faucet to stop a slow drip at the spout.",
+  "difficulty": "medium",
+  "total_duration_min": 25,
+  "estimated_cost_eur": { "parts_low": 8, "parts_high": 25 },
+  "safety_pre_check": [
+    "Shut off the hot AND cold supply valves under the sink.",
+    "Open the tap to relieve any residual line pressure.",
+    "Place a small towel in the sink basin to catch dropped screws.",
+    "Confirm the supply is fully off before disassembling the cartridge."
+  ],
+  "parts_summary": [
+    { "name": "Replacement ceramic cartridge", "quantity": 1, "specification": "Match the existing cartridge brand + size (typically 35 mm or 40 mm)" },
+    { "name": "Plumber's grease", "quantity": 1, "specification": "Silicone-based grease for the new cartridge O-rings" }
+  ],
+  "tools_summary": [
+    { "name": "Allen key set", "required": true, "specification": "Usually 2.5 mm hex for the handle grub screw" },
+    { "name": "Adjustable wrench", "required": true, "specification": "To loosen the cartridge retaining nut" },
+    { "name": "Soft cloth", "required": false, "specification": "Protects the chrome from wrench marks" }
+  ],
+  "scene_lock": {
+    "subject": "A modern single-lever brushed-chrome kitchen mixer tap mounted at the back of a stainless-steel sink.",
+    "environment": "Bright kitchen counter, white tile splashback, daylight from a side window, neutral indoor lighting.",
+    "hands_style": "Adult hands wearing yellow nitrile household gloves.",
+    "style": "Photorealistic instructional video style with clean macro detail and natural daylight.",
+    "color_palette": "Chrome silver tap, stainless steel sink, white tile, yellow gloves, neutral daylight.",
+    "shot_default": "close-up",
+    "camera_default": "static",
+    "consistency_phrases": [
+      "Keep the same chrome single-lever tap across all shots",
+      "Show only the spout drip until the cartridge is replaced",
+      "Maintain the kitchen background"
+    ],
+    "negative_cues": [
+      "extra text inside the image",
+      "watermarks",
+      "cartoon style",
+      "deformed hands",
+      "different style faucet",
+      "bathroom sink"
+    ]
+  },
+  "steps": [
+    {
+      "step_number": 1,
+      "title": "Shut off the water supply",
+      "description": "Open the cabinet under the sink, close both the hot and cold supply valves clockwise, then open the kitchen tap to release any remaining pressure.",
+      "parts_needed": [],
+      "tools_needed": [],
+      "duration_seconds": 20,
+      "shot_type": "medium",
+      "camera_movement": "subtle_pan_right",
+      "motion_pacing": "deliberate",
+      "subject_focus": "The two angle-stop supply valves under the sink.",
+      "visual_prompt_start": "Scene: Inside the cabinet under the kitchen sink. Subject: Yellow-gloved hands reach for the hot (red) supply valve. Details: Photorealistic, copper supply lines clearly visible, indirect daylight.",
+      "visual_prompt_end": "Scene: Same cabinet. Subject: Both supply valves are now in the closed position (handles perpendicular to the line). Details: Photorealistic, visibly closed valves.",
+      "motion_prompt": "Animate the hand turning the hot supply valve clockwise to closed, then the cold one, then briefly opening the kitchen tap above to confirm no flow.",
+      "narration": "Open the cabinet under the sink and close both the hot and cold supply valves, then open the tap to release any remaining pressure.",
+      "subtitle": "Shut off the water.",
+      "safety_note": "Confirm the water is fully off before opening the cartridge — a pressurized line will spray.",
+      "success_criteria": "Both supply valves fully closed and the tap runs dry.",
+      "common_mistake": "Only closing one of the two supply lines."
+    },
+    {
+      "step_number": 2,
+      "title": "Remove the handle and retaining nut",
+      "description": "Pop off the decorative cap on the handle, loosen the grub screw with the Allen key, lift the lever off, then unscrew the chrome retaining nut to expose the cartridge.",
+      "parts_needed": [],
+      "tools_needed": ["Allen key set", "Adjustable wrench", "Soft cloth"],
+      "duration_seconds": 35,
+      "shot_type": "close-up",
+      "camera_movement": "static",
+      "motion_pacing": "controlled",
+      "subject_focus": "The handle, grub screw, and chrome retaining nut.",
+      "visual_prompt_start": "Scene: Kitchen counter. Subject: Yellow-gloved hands hold a small Allen key against the side of the faucet handle where the grub screw sits. Details: Photorealistic close-up, brushed chrome reflecting daylight.",
+      "visual_prompt_end": "Scene: Same kitchen. Subject: The lever handle has been removed and set aside, and the chrome retaining nut has been unscrewed and lifted, exposing the brass-bodied ceramic cartridge in the faucet base. Details: Photorealistic macro, internal cartridge clearly visible.",
+      "motion_prompt": "Animate the Allen key loosening the grub screw, the handle sliding off, then the adjustable wrench (cushioned with cloth) loosening the retaining nut.",
+      "narration": "Pop the cap, loosen the grub screw with the Allen key, lift the handle off, and unscrew the chrome retaining nut.",
+      "subtitle": "Remove the handle and nut.",
+      "safety_note": "Cushion the chrome with a soft cloth to avoid scratching it.",
+      "success_criteria": "Handle removed and the cartridge body is now accessible.",
+      "common_mistake": "Forgetting to release line pressure first — water sprays out when the nut comes off."
+    },
+    {
+      "step_number": 3,
+      "title": "Swap the cartridge and reassemble",
+      "description": "Pull the old cartridge straight up, drop the new one in matching the alignment tabs, grease the O-rings, then reverse the disassembly to put the faucet back together.",
+      "parts_needed": ["Replacement ceramic cartridge", "Plumber's grease"],
+      "tools_needed": ["Allen key set", "Adjustable wrench"],
+      "duration_seconds": 50,
+      "shot_type": "macro",
+      "camera_movement": "subtle_zoom_in",
+      "motion_pacing": "slow_methodical",
+      "subject_focus": "The ceramic cartridge being swapped.",
+      "visual_prompt_start": "Scene: Kitchen counter. Subject: Yellow-gloved hands pull the old ceramic cartridge straight up out of the brass faucet body. Details: Photorealistic macro, alignment tabs visible.",
+      "visual_prompt_end": "Scene: Same kitchen. Subject: The new cartridge is seated correctly with alignment tabs in place, the retaining nut hand-tightened then snugged with the wrench, the lever back on, and the supply valves reopened — water flows from the tap cleanly with no drip. Details: Photorealistic, no water leaking, clean reassembled faucet.",
+      "motion_prompt": "Animate the old cartridge lifted out, the new one greased and dropped in with alignment, the nut and handle reassembled, and finally the supply valves reopened with water flowing cleanly.",
+      "narration": "Lift the old cartridge out, drop the new one in matching the alignment tabs, then reverse the steps to reassemble and turn the water back on.",
+      "subtitle": "Install the new cartridge.",
+      "safety_note": "Do not over-tighten the retaining nut — hand-tight plus a quarter turn is enough.",
+      "success_criteria": "Tap operates smoothly with no drip at the spout.",
+      "common_mistake": "Installing the new cartridge rotated 180° — the hot/cold sides will be swapped."
+    }
+  ]
+}
