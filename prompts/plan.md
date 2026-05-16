@@ -1,53 +1,89 @@
-# /api/plan — Tavily search/extract + GPT-5.5 synthesis
+# /api/plan — two-stage Tavily research + GPT-5.5 synthesis
 
 **Owner:** Role B
-**Strategy (decided iteration 3):** Tavily `/search` + `/extract` (synchronous) → single GPT-5.5 `generateObject` pass that produces a fully-populated `RepairPlan`.
-**Why not `/research`:** the `@tavily/core` client's `research()` is async (returns a `requestId`, requires polling `getResearch` until status="completed"). Adds latency and polling complexity. We get equivalent grounding from `/search` + `/extract` with a single GPT-5.5 synthesis pass.
+**Strategy (iteration 5):** two parallel Tavily search+extract pipelines feed a single GPT-5.5 `generateObject` synthesis call. The two stages target different signal types (model spec vs repair procedure) — combined they give the LLM much richer grounding than a single pass.
 
-**Output language:** ENGLISH content in every field, including the legacy `_fr`-suffixed keys (`title_fr`, `description_fr`, `narration_fr`, `problem_summary_fr`). The schema in `lib/types.ts` is frozen — content language is decoupled from field name.
+**Output language:** ENGLISH in every text field, including the legacy `_fr` keys (schema in `lib/types.ts` is frozen; content language is decoupled).
 
-## Step 1 — Tavily search query
+## Architecture
 
 ```
-How to repair: {analyze.problem_visual} on {analyze.object}.
-Context from user clarification: {JSON.stringify(answers)}.   (only if answers present)
+PlanRequest { analyze, answers? }
+   │
+   ├── Stage 1 (parallel) ─ MODEL IDENTIFICATION
+   │       query: "Identify exact product model and compatible spare parts:
+   │              {analyze.object}. User-confirmed specs: {answers}."
+   │       domains: MODEL_ID_DOMAINS (ifixit, apple support, amazon,
+   │                home depot, lowes, plumbingsupply, mcmaster,
+   │                sheldonbrown, decathlon)
+   │       → top-3 results by score → extract advanced
+   │
+   ├── Stage 2 (parallel) ─ REPAIR GUIDE
+   │       query: "Step-by-step repair manual: {analyze.problem_visual}
+   │              on {analyze.object}. Specifications confirmed: {answers}."
+   │       domains: REPAIR_GUIDE_DOMAINS (ifixit, instructables,
+   │                familyhandyman, wikihow, thespruce, bicycling,
+   │                parktool, sheldonbrown)
+   │       → top-3 results by score → extract advanced
+   │
+   ├── Merge: concat Stage 1 + Stage 2 blocks, dedupe by source URL,
+   │   cap at 24 KB.
+   │
+   └── GPT-5.5 generateObject(schema = RepairPlan)
+         system: synthesis rules (per-step + top-level fields, all EN)
+         user: structured analyze strings + answers + merged research
+       → RepairPlan.parse → 200 OK
 ```
 
-Options:
-- `searchDepth: 'advanced'`
-- `maxResults: 5`
-- `includeDomains: EN_REPAIR_DOMAINS` (local const — does NOT touch `lib/tavily.ts` `FR_REPAIR_DOMAINS`)
-- `includeRawContent: 'text'`
+## Why two stages (vs one)
 
-`EN_REPAIR_DOMAINS` (local to the route):
-`ifixit.com`, `instructables.com`, `familyhandyman.com`, `wikihow.com`, `thespruce.com`, `bicycling.com`.
+- Stage 1 (model ID) gives the LLM spec-sheet / catalog content. This is where part numbers, dimensions, screw types, and compatibility ranges live.
+- Stage 2 (repair guide) gives the LLM the actual procedure (iFixit teardowns, wikiHow walk-throughs).
+- A single broad query mixes both signals and tends to miss either spec-only catalogs (which don't describe repair) or repair-only guides (which assume the model is known). Splitting the queries surfaces the right document type in each lane.
+- Both Tavily calls run in `Promise.all` — no serial latency penalty.
 
-## Step 2 — Tavily extract
+## Domain lists (local to the route)
 
-Take top-3 results by `score`, call `tavilyClient().extract(urls, { extractDepth: 'basic' })`. Concatenate `rawContent` into a single research context, truncated to 18 KB to keep the LLM prompt manageable.
+`lib/tavily.ts` exports `FR_REPAIR_DOMAINS` (FR sites) — left untouched, used by other roles. The plan route defines its OWN `MODEL_ID_DOMAINS` and `REPAIR_GUIDE_DOMAINS` arrays locally.
 
-Failure mode: any Tavily failure is non-fatal — we fall through with empty research context, the LLM falls back to general repair knowledge.
+## Synthesis system prompt (canonical — embedded as a constant)
 
-## Step 3 — GPT-5.5 synthesis (single `generateObject` call)
-
-System prompt (canonical — embedded as a constant in `app/api/plan/route.ts`):
-
-Defines, per step:
+Required outputs per step:
 - `title_fr` ≤6 words EN
-- `description_fr` 1–2 sentences EN
-- `parts_needed`, `tools_needed`: short EN strings, empty arrays allowed
-- `duration_seconds`: 30–600s integer
-- `visual_prompt_start` / `visual_prompt_end`: ≤25 words EN scene descriptions (BEFORE / AFTER state), with object + hands + tools in frame
-- `motion_prompt`: ≤1 sentence EN describing the delta (the action itself)
-- `narration_fr`: 50–80 words EN, second-person ("you"), pace matches duration_seconds
+- `description_fr` 1–2 sentences EN, naming the sub-component acted upon
+- `parts_needed`, `tools_needed`: short EN strings; use specific P/Ns or dimensions when the research context provides them
+- `duration_seconds`: integer 30–600
+- `visual_prompt_start` / `visual_prompt_end`: ≤25 words EN; mention brand/model from input, hands, tools, sub-component
+- `motion_prompt`: ≤1 EN sentence describing the start→end delta
+- `narration_fr`: 50–80 words EN, second-person ("you"), pace matches `duration_seconds`. Use the research context's specificity (torques, screw types, washer orientation) wherever available.
 
-Top-level: `problem_summary_fr` ≤15 words EN, `difficulty`, `total_duration_min`.
+Top-level: `problem_summary_fr` ≤15 words EN (restate the defect + location), `difficulty`, `total_duration_min`.
 
-Output schema: `RepairPlan` (passed directly to `generateObject` as `schema:`; Zod v4 + AI SDK 5 enforce validity before the route returns).
+Grounding rules:
+- Prefer the research context for procedure, parts, tools.
+- Use confirmed model/dimensions explicitly in titles, narration, prompts.
+- Don't invent torques, voltages, or part numbers not supported by context or general knowledge.
+- Surface safety warnings from the research context inside `narration_fr` when relevant.
+
+## Failure modes & fallbacks
+
+- Either Tavily stage can fail (rate limit, no results) → its branch returns empty context. The other branch still feeds the LLM.
+- Both stages can fail → the LLM produces a plan from `analyze` strings + general knowledge. The plan stays schema-valid; quality degrades gracefully.
+- If GPT-5.5 emits <2 or >10 steps, Zod parsing fails → the route returns `plan_failed`. Re-roll; the prompt is tight but the model can drift.
+
+## Latency budget
+
+| Step | Time |
+|---|---|
+| Stage 1 search + extract | 3–5s |
+| Stage 2 search + extract | 3–5s (parallel with Stage 1) |
+| GPT-5.5 synthesis | 5–8s |
+| **Total** | **8–13s** |
+
+Well under Vercel Pro's 300s default for non-`stitch`/`run` routes.
 
 ## Notes for Role B
 
-- The 4 generative fields (`visual_prompt_start`, `visual_prompt_end`, `motion_prompt`, `narration_fr`) are filled in the SAME LLM call as the factual fields. No second pass needed — saves ~3s latency.
-- If the model returns <2 or >8 steps, Zod fails parsing → caller gets `plan_failed`. Re-roll by hitting the endpoint again; the prompt is already tight, but the model can drift.
-- Latency target: ~6–12s end-to-end (search 1–2s, extract 2–4s, GPT-5.5 3–6s). On Vercel Pro the route runs under the default 300s limit without extra `vercel.json` config.
-- For TTS downstream: `narration_fr` content is English. Role C will swap `GRADIUM_TTS_VOICE_ID` to an EN voice (their config change, out of Role B scope).
+- Per-step `narration_fr` content is ENGLISH. Role C will swap `GRADIUM_TTS_VOICE_ID` to an English voice in their `.env` (1-line change, out of Role B scope).
+- The synthesis prompt consumes the slotted analyze strings as-is — no parsing logic needed. The LLM understands the slot format natively.
+- If a specific repair (e.g. iPhone) consistently produces overly generic plans, tighten the prompt by adding 1 worked example in the system message. We keep the prompt example-free for now to save tokens; revisit if quality drops.

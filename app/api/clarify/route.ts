@@ -18,19 +18,33 @@ import { ClarifyOptions, ClarifyRequest } from '@/lib/types';
 
 export const runtime = 'nodejs';
 
-const SYSTEM_PROMPT = `You polish UI-ready clarification questions for an end user.
+const SYSTEM_PROMPT = `You polish clarification questions into UI-ready form for an end user. Your output drives the buttons / free-text inputs shown in the app, and the answers feed the parts-research stage.
 
-Input: an object identification, a visual problem description, and a list of uncertainties detected by an upstream vision model.
+Inputs you receive (in the user message):
+- The structured object identification (a slotted string from upstream).
+- The structured visible problem (a slotted string from upstream).
+- The list of uncertainties produced by the upstream vision step. Each may already include a "(— used to …)" purpose clause.
 
-For each uncertainty:
-- Rewrite "question_fr" as a short, direct English question — no politeness, no "Could you please…". Examples: "Which model?", "Type of screw?".
-- Provide 1 to 3 "options", each ≤3 words, English. Do not invent options if no signal supports them — omit the field instead.
-- Keep "field" unchanged.
+For EACH uncertainty:
+- Keep "field" UNCHANGED (downstream lookup key).
+- Rewrite "question_fr" with this exact format:
+    "<short direct English question> (— used to <one-line purpose>)"
+  Examples:
+    "Which exact iPhone model? (— used to pick the correct display assembly P/N)"
+    "Trap diameter in mm? (— used to size the replacement slip washer and nut)"
+  If a purpose clause is already present, keep / refine it; if missing, INFER it from the field name and the object/problem context and add it. The purpose clause is mandatory.
+- "options": include 1–3 strings (≤3 words each) ONLY when ≤3 candidates are realistically enumerable from the input context. Otherwise OMIT the field entirely so the UI renders a free-text input. Do not invent options.
+- The question must remain answerable in <5 seconds by a non-expert end user.
+
+Polishing rules:
+- No politeness ("Could you please…", "Would you mind…"): use direct questions.
+- Avoid technical jargon if a plain phrasing exists. Keep precision in the purpose clause, not in the question itself.
+- Keep questions ≤8 words (before the purpose clause).
 
 Strict output:
 - Return JSON matching the ClarifyOptions schema.
-- All text content in ENGLISH (the field name "question_fr" is legacy — its content must be English).
-- Do not add uncertainties that the input did not contain. Do not drop input uncertainties.`;
+- All text content in ENGLISH (the legacy "_fr" field name is decoupled from content language).
+- Same number of uncertainties as input. Do not add, do not drop, do not reorder unless reordering puts the most-blocking question first.`;
 
 const userPrompt = (object: string, problemVisual: string, uncertaintiesJson: string): string =>
   `Object: ${object}

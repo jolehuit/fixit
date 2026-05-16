@@ -2,22 +2,28 @@
  * POST /api/plan
  * Owner: Role B
  *
- * Pipeline:
- *  1. Tavily /search on an EN repair query, restricted to high-signal EN DIY
- *     domains (ifixit, instructables, family handyman, wikihow, thespruce).
- *  2. Tavily /extract on the top 3 results → raw markdown context.
- *  3. GPT-5.5 generateObject with RepairPlan schema. ONE pass fills both the
- *     factual fields (titles, descriptions, parts, tools, durations) AND the
- *     generative fields (visual_prompt_start/end, motion_prompt, narration_fr)
- *     that Role C depends on.
+ * Two-stage Tavily research + single GPT-5.5 synthesis pass.
  *
- * Output language: ENGLISH content in every text field, including the legacy
- * `_fr`-suffixed keys (schema names frozen, content language decoupled).
+ *   Stage 1 — Model identification:
+ *     Search using brand + visible markings + clarification answers.
+ *     Target: spec sheets, official product pages, P/N catalogs.
+ *     Goal: confirm exact compatible model/SKU and narrow which parts apply.
  *
- * Failure modes:
- *  - Tavily search returns 0 results → fall through with empty context; the
- *    LLM still produces a plan from analyze.object + problem_visual alone.
- *  - Tavily extract partial-fails → use only the successful extracts.
+ *   Stage 2 — Repair-guide research:
+ *     Search using the (now-confirmed) model + defect type + defect location.
+ *     Target: step-by-step repair manuals (iFixit, Instructables, manufacturer guides).
+ *     Goal: extract the actual procedure to ground the LLM synthesis.
+ *
+ *   Extraction: top-3 results from each stage → 6 sources, deduped by URL,
+ *   merged into one capped context.
+ *
+ *   Synthesis: GPT-5.5 generateObject(schema=RepairPlan) produces:
+ *     - factual fields (titles, descriptions, parts, tools, durations)
+ *     - generative fields Role C consumes (visual_prompt_start/end,
+ *       motion_prompt, narration_fr) — ALL in English content.
+ *
+ * Output language: ENGLISH in every text field (legacy "_fr" suffixes
+ * are kept by contract; content is decoupled from field name).
  */
 
 import { generateObject } from 'ai';
@@ -30,55 +36,88 @@ import { PlanRequest, RepairPlan } from '@/lib/types';
 export const runtime = 'nodejs';
 
 /**
- * High-signal EN DIY/repair domains. Local to Role B; the project-level
- * FR_REPAIR_DOMAINS in lib/tavily.ts stays untouched (other roles may use it).
+ * High-signal EN DIY / repair / manufacturer-support domains. Local to Role B;
+ * the shared FR_REPAIR_DOMAINS in lib/tavily.ts stays untouched.
+ *
+ * Stage 1 (model ID) prefers manufacturer + retailer catalogs.
+ * Stage 2 (repair guide) prefers iFixit + community DIY content.
+ * Both lists overlap intentionally — Tavily handles the filter.
  */
-const EN_REPAIR_DOMAINS = [
+const MODEL_ID_DOMAINS = [
+  'ifixit.com',
+  'support.apple.com',
+  'amazon.com',
+  'homedepot.com',
+  'lowes.com',
+  'plumbingsupply.com',
+  'mcmaster.com',
+  'sheldonbrown.com',
+  'decathlon.com',
+];
+
+const REPAIR_GUIDE_DOMAINS = [
   'ifixit.com',
   'instructables.com',
   'familyhandyman.com',
   'wikihow.com',
   'thespruce.com',
   'bicycling.com',
+  'parktool.com',
+  'sheldonbrown.com',
 ];
 
+const MAX_CONTEXT_BYTES = 24000;
+
 const SYSTEM_PROMPT = `You are a repair-procedure synthesizer. You receive:
-- Object identification + visible problem (from a vision step).
-- Optional clarification answers from the user.
-- Raw research context scraped from EN DIY sources.
+- A structured product identification string (slotted: Brand / Model / Markings / etc.).
+- A structured visible-problem string (slotted: Defect / Location / Severity / Signs).
+- Optional clarification answers from the user (model number, year, dimensions…).
+- Raw research context: spec-sheet content (Stage 1) AND repair-guide content (Stage 2), concatenated with source URLs.
 
-Produce a complete RepairPlan JSON. EVERY field must be populated. Steps must be ordered, 2 to 8 of them, each independently filmable in roughly 4 to 8 seconds.
+Your job: produce a COMPLETE RepairPlan JSON that another team will use to generate a video. Every field is mandatory. Steps must be ordered, 2 to 10 of them, each filmable in roughly 4–8 seconds.
 
-Per step:
-- "title_fr": ≤6 words, English (legacy field name, content is English).
-- "description_fr": 1–2 short sentences, English.
-- "parts_needed": list, each ≤3 words. Empty array if no parts.
+For EACH step:
+- "title_fr": ≤6 words, English (legacy field name, content English).
+- "description_fr": 1–2 short sentences, English. Mention the specific sub-component the step acts on.
+- "parts_needed": list, each ≤3 words. Where the research context names a specific part (P/N, brand, dimension), use that. Empty array if no parts.
 - "tools_needed": list, each ≤3 words. Empty array if no tools.
-- "duration_seconds": realistic, 30 to 600 seconds, integer.
-- "visual_prompt_start": short ENGLISH scene description for an image generator. Mention the object, hand position, tools in frame, the state BEFORE the action. ≤25 words.
-- "visual_prompt_end": same, for the state AFTER the action. ≤25 words.
-- "motion_prompt": ≤1 ENGLISH sentence describing what changes between start and end (the action itself).
-- "narration_fr": 50–80 words, ENGLISH (legacy field name), second-person ("you"), describes what the user is doing in this step, narration-style. Pace must roughly match duration_seconds.
+- "duration_seconds": integer 30–600, realistic.
+- "visual_prompt_start": ≤25 English words. Describe the BEFORE state. Mention the specific object (use brand/model from input), the hand position, tools in frame, the relevant sub-component.
+- "visual_prompt_end": ≤25 English words. Describe the AFTER state in the same scene language.
+- "motion_prompt": ≤1 English sentence. The action that transforms start → end.
+- "narration_fr": 50–80 words, English (legacy field name), second-person ("you"). Describe what the user does, with the precision the research context allows (e.g. mention specific torque, screw type, washer orientation). Pace must match duration_seconds.
 
-Top level:
-- "problem_summary_fr": ≤15 words, English. The problem in one user-readable sentence.
-- "difficulty": easy | medium | hard.
+Top-level:
+- "problem_summary_fr": ≤15 words, English. Restate the defect with its location precisely.
+- "difficulty": easy | medium | hard. Calibrate by the count and risk of disassembly + tool requirements.
 - "total_duration_min": integer minutes, sum of step durations rounded up.
 
-Rules:
-- All text content in ENGLISH regardless of field name.
-- Do not invent parts/tools not implied by the research context or general repair knowledge.
-- If the research context is thin, lean on general repair knowledge for the procedure but stay safe (no electrical/gas work shortcuts).
-- Output strict JSON matching the schema. No extra fields.`;
+Grounding rules:
+- Prefer the research context for procedure, parts, and tools. Fall back on general repair knowledge only when context is thin.
+- When the input gives a confirmed model/dimension, use it explicitly in titles, narration, and prompts.
+- Do not invent specific torques, voltages, or part numbers not supported by the research context or general knowledge.
+- Safety: if the research context warns about a step (battery, gas, mains), include the warning in narration_fr.
 
-function buildSearchQuery(
+Strict output:
+- JSON matches the RepairPlan schema. No extra fields.
+- All text content in ENGLISH regardless of field name.`;
+
+function buildModelIdQuery(object: string, answersJson: string | null): string {
+  const base = `Identify exact product model and compatible spare parts: ${object}`;
+  if (answersJson) {
+    return `${base}. User-confirmed specifications: ${answersJson}.`;
+  }
+  return base;
+}
+
+function buildRepairGuideQuery(
   object: string,
   problemVisual: string,
   answersJson: string | null,
 ): string {
-  const base = `How to repair: ${problemVisual} on ${object}.`;
+  const base = `Step-by-step repair manual: ${problemVisual} on ${object}`;
   if (answersJson) {
-    return `${base} Context from user clarification: ${answersJson}.`;
+    return `${base}. Specifications confirmed: ${answersJson}.`;
   }
   return base;
 }
@@ -90,16 +129,56 @@ function buildLlmUserPrompt(
   answersJson: string | null,
   researchContext: string,
 ): string {
-  return `Object: ${object}
-Category: ${category}
-Visible problem: ${problemVisual}
-${answersJson ? `User clarification answers (JSON): ${answersJson}` : 'No clarification answers.'}
+  return `--- Product identification (structured) ---
+${object}
 
---- Research context (raw, may be partial) ---
+--- Visible problem (structured) ---
+${problemVisual}
+
+--- Category ---
+${category}
+
+--- User clarification answers ---
+${answersJson ?? 'No clarification answers provided.'}
+
+--- Research context (Stage 1 = model spec sheets, Stage 2 = repair guides) ---
 ${researchContext || '(no external research available — rely on general repair knowledge)'}
 --- End research context ---
 
-Produce the RepairPlan JSON per the system rules.`;
+Produce the RepairPlan JSON per the system rules. Be specific. Use the confirmed model and the procedure from the research context wherever possible.`;
+}
+
+/** Run a Tavily search → extract pipeline; return merged rawContent or "". */
+async function fetchResearch(
+  query: string,
+  domains: string[],
+  maxSearchResults: number,
+  maxExtractUrls: number,
+): Promise<{ context: string; urls: string[] }> {
+  try {
+    const tvly = tavilyClient();
+    const searchRes = await tvly.search(query, {
+      searchDepth: 'advanced',
+      maxResults: maxSearchResults,
+      includeDomains: domains,
+      includeRawContent: 'text',
+    });
+
+    const topUrls = (searchRes.results ?? [])
+      .sort((a, b) => b.score - a.score)
+      .slice(0, maxExtractUrls)
+      .map((r) => r.url);
+
+    if (topUrls.length === 0) return { context: '', urls: [] };
+
+    const extractRes = await tvly.extract(topUrls, { extractDepth: 'advanced' });
+    const blocks = (extractRes.results ?? []).map(
+      (r) => `# Source: ${r.url}\n${r.rawContent ?? ''}`,
+    );
+    return { context: blocks.join('\n\n'), urls: topUrls };
+  } catch {
+    return { context: '', urls: [] };
+  }
 }
 
 export async function POST(req: Request) {
@@ -123,33 +202,43 @@ export async function POST(req: Request) {
   const { analyze, answers } = parsed.data;
   const answersJson = answers && answers.length > 0 ? JSON.stringify(answers) : null;
 
-  let researchContext = '';
-  try {
-    const tvly = tavilyClient();
-    const searchQuery = buildSearchQuery(analyze.object, analyze.problem_visual, answersJson);
-    const searchRes = await tvly.search(searchQuery, {
-      searchDepth: 'advanced',
-      maxResults: 5,
-      includeDomains: EN_REPAIR_DOMAINS,
-      includeRawContent: 'text',
-    });
+  // Two-stage parallel Tavily fetch.
+  const [stageModel, stageRepair] = await Promise.all([
+    fetchResearch(buildModelIdQuery(analyze.object, answersJson), MODEL_ID_DOMAINS, 5, 3),
+    fetchResearch(
+      buildRepairGuideQuery(analyze.object, analyze.problem_visual, answersJson),
+      REPAIR_GUIDE_DOMAINS,
+      5,
+      3,
+    ),
+  ]);
 
-    const topUrls = (searchRes.results ?? [])
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 3)
-      .map((r) => r.url);
+  // Merge contexts, dedupe by source URL, cap total bytes.
+  const seenUrls = new Set<string>();
+  const sections: string[] = [];
 
-    if (topUrls.length > 0) {
-      const extractRes = await tvly.extract(topUrls, { extractDepth: 'basic' });
-      researchContext = (extractRes.results ?? [])
-        .map((r) => `# ${r.url}\n${r.rawContent}`)
-        .join('\n\n')
-        .slice(0, 18000);
-    }
-  } catch (_err) {
-    // Tavily failure is non-fatal — fall through to LLM-only generation.
-    researchContext = '';
+  if (stageModel.context) {
+    sections.push(`=== STAGE 1: MODEL IDENTIFICATION ===\n${stageModel.context}`);
+    for (const u of stageModel.urls) seenUrls.add(u);
   }
+  if (stageRepair.context) {
+    // Crude dedupe: if a Stage 2 URL already appeared in Stage 1, drop its block.
+    const filtered = stageRepair.context
+      .split('\n\n')
+      .filter((block) => {
+        const m = block.match(/^# Source: (\S+)/);
+        if (!m) return true;
+        if (seenUrls.has(m[1])) return false;
+        seenUrls.add(m[1]);
+        return true;
+      })
+      .join('\n\n');
+    if (filtered.trim()) {
+      sections.push(`=== STAGE 2: REPAIR GUIDES ===\n${filtered}`);
+    }
+  }
+
+  const researchContext = sections.join('\n\n').slice(0, MAX_CONTEXT_BYTES);
 
   try {
     const result = await generateObject({
