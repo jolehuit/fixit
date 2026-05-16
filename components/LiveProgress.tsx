@@ -107,32 +107,36 @@ function reducer(state: LiveState, action: Action): LiveState {
   }
 }
 
-// ---- Helpers to extract a 1-line summary from the slotted analyze strings ----
+// ---- Helpers to extract slots from the slotted analyze strings ----
 
-function pickSlot(slottedString: string, slotName: string): string | null {
+type Slot = { label: string; value: string };
+
+function parseSlots(slotted: string): Slot[] {
   // Slotted format: "Brand: X ; Model line: Y ; ..."
-  const re = new RegExp(`(?:^|\\s;\\s)${slotName}\\s*:\\s*([^;]+)`);
-  const m = slottedString.match(re);
-  return m ? m[1].trim() : null;
+  return slotted
+    .split(/\s*;\s*/)
+    .map((chunk) => {
+      const m = chunk.match(/^([^:]+):\s*(.*)$/);
+      if (!m) return null;
+      const value = m[2].trim();
+      if (!value) return null; // hide empty slots
+      return { label: m[1].trim(), value };
+    })
+    .filter((s): s is Slot => s !== null);
 }
 
-function shortObjectSummary(slotted: string): string {
-  const brand = pickSlot(slotted, 'Brand');
-  const modelLine = pickSlot(slotted, 'Model line');
-  const variant = pickSlot(slotted, 'Model code or variant');
-  const parts = [brand, modelLine, variant].filter(Boolean) as string[];
-  if (parts.length === 0) {
-    // Fall back to the first slot (or the whole string truncated)
-    return slotted.split(/\s*;\s*/)[0]?.trim() ?? slotted.slice(0, 80);
-  }
-  return parts.join(' · ');
+function pickSlot(slots: Slot[], label: string): string | null {
+  const s = slots.find((s) => s.label.toLowerCase() === label.toLowerCase());
+  return s ? s.value : null;
 }
 
-function shortProblemSummary(slotted: string): string {
-  const defect = pickSlot(slotted, 'Defect');
-  const where = pickSlot(slotted, 'located at');
-  if (defect && where) return `${defect} — at ${where}`;
-  return defect ?? slotted.split(/\s*;\s*/)[0]?.trim() ?? slotted.slice(0, 100);
+function severityTone(value: string | null): 'minor' | 'moderate' | 'severe' | null {
+  if (!value) return null;
+  const v = value.toLowerCase();
+  if (v.includes('severe') || v.includes('critical')) return 'severe';
+  if (v.includes('moderate')) return 'moderate';
+  if (v.includes('minor') || v.includes('mild')) return 'minor';
+  return null;
 }
 
 export function LiveProgress({
@@ -285,54 +289,100 @@ function StatusLine({ line }: { line: LogLine }) {
 }
 
 function IdentificationCard({ analyze }: { analyze: AnalyzeResult }) {
-  const [open, setOpen] = useState(false);
-  const objSummary = shortObjectSummary(analyze.object);
-  const probSummary = shortProblemSummary(analyze.problem_visual);
-  const objSlots = analyze.object.split(/\s*;\s*/).filter(Boolean);
-  const probSlots = analyze.problem_visual.split(/\s*;\s*/).filter(Boolean);
+  const objSlots = parseSlots(analyze.object);
+  const probSlots = parseSlots(analyze.problem_visual);
+
+  const brand = pickSlot(objSlots, 'Brand');
+  const modelLine = pickSlot(objSlots, 'Model line');
+  const variant = pickSlot(objSlots, 'Model code or variant');
+  const headline =
+    [brand, modelLine, variant].filter(Boolean).join(' · ') || objSlots[0]?.value || 'Identified';
+
+  const defect = pickSlot(probSlots, 'Defect');
+  const located = pickSlot(probSlots, 'located at');
+  const severity = pickSlot(probSlots, 'severity');
+  const tone = severityTone(severity);
 
   return (
-    <section className="flex animate-[fade-in_220ms_ease-out] flex-col gap-2 rounded-lg border border-[color:var(--color-border)] bg-white p-4">
-      <div className="flex items-baseline justify-between gap-3">
-        <h3 className="text-sm font-semibold text-[color:var(--color-fg)]">Identification</h3>
-        <button
-          type="button"
-          onClick={() => setOpen((v) => !v)}
-          className="text-xs font-medium text-[color:var(--color-accent)] transition hover:underline"
-        >
-          {open ? 'Hide details' : 'Show details'}
-        </button>
+    <section className="flex animate-[fade-in_220ms_ease-out] flex-col gap-4 rounded-lg border border-[color:var(--color-border)] bg-white p-4">
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center gap-2">
+          <span className="inline-flex h-5 items-center rounded-full bg-[color:var(--color-accent)]/10 px-2 text-[10px] font-semibold uppercase tracking-wider text-[color:var(--color-accent)]">
+            {analyze.category}
+          </span>
+          <h3 className="text-base font-semibold text-[color:var(--color-fg)]">{headline}</h3>
+        </div>
+        {objSlots.length > 0 ? (
+          <SpecSheet
+            slots={objSlots.filter(
+              (s) =>
+                s.label.toLowerCase() !== 'brand' &&
+                s.label.toLowerCase() !== 'model line' &&
+                s.label.toLowerCase() !== 'model code or variant',
+            )}
+          />
+        ) : null}
       </div>
-      <p className="text-sm text-[color:var(--color-fg)]">
-        <span className="font-medium">Object — </span>
-        {objSummary}
-      </p>
-      <p className="text-sm text-[color:var(--color-fg)]">
-        <span className="font-medium">Problem — </span>
-        {probSummary}
-      </p>
-      {open ? (
-        <div className="mt-2 flex flex-col gap-3 border-t border-[color:var(--color-border)] pt-3">
-          <SlotList label="Object slots" slots={objSlots} />
-          <SlotList label="Problem slots" slots={probSlots} />
+
+      {defect || located || severity ? (
+        <div className="flex flex-col gap-3 border-t border-[color:var(--color-border)] pt-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <h4 className="text-sm font-semibold text-[color:var(--color-fg)]">Problem</h4>
+            {tone ? <SeverityPill tone={tone} label={severity ?? tone} /> : null}
+          </div>
+          {defect ? (
+            <p className="text-sm text-[color:var(--color-fg)]">
+              <span className="font-medium">{defect}</span>
+              {located ? (
+                <span className="text-[color:var(--color-muted)]"> · {located}</span>
+              ) : null}
+            </p>
+          ) : null}
+          <SpecSheet
+            slots={probSlots.filter(
+              (s) => !['defect', 'located at', 'severity'].includes(s.label.toLowerCase()),
+            )}
+          />
         </div>
       ) : null}
     </section>
   );
 }
 
-function SlotList({ label, slots }: { label: string; slots: string[] }) {
+function SpecSheet({ slots }: { slots: Slot[] }) {
+  if (slots.length === 0) return null;
   return (
-    <div className="flex flex-col gap-0.5">
-      <span className="text-[10px] font-medium uppercase tracking-wide text-[color:var(--color-subtle)]">
+    <dl className="grid grid-cols-1 gap-x-4 gap-y-1.5 sm:grid-cols-[max-content_1fr]">
+      {slots.map((s) => (
+        <SpecRow key={s.label} label={s.label} value={s.value} />
+      ))}
+    </dl>
+  );
+}
+
+function SpecRow({ label, value }: { label: string; value: string }) {
+  return (
+    <>
+      <dt className="text-xs font-medium uppercase tracking-wide text-[color:var(--color-subtle)] sm:py-0.5">
         {label}
-      </span>
-      <ul className="flex flex-col gap-0.5 text-xs text-[color:var(--color-muted)]">
-        {slots.map((s) => (
-          <li key={s}>{s}</li>
-        ))}
-      </ul>
-    </div>
+      </dt>
+      <dd className="text-sm text-[color:var(--color-fg)] sm:py-0.5">{value}</dd>
+    </>
+  );
+}
+
+function SeverityPill({ tone, label }: { tone: 'minor' | 'moderate' | 'severe'; label: string }) {
+  const styles = {
+    minor: 'bg-[color:var(--color-accent)]/10 text-[color:var(--color-accent)]',
+    moderate: 'bg-[color:var(--color-warn)]/15 text-[color:var(--color-warn)]',
+    severe: 'bg-[color:var(--color-danger)]/15 text-[color:var(--color-danger)]',
+  }[tone];
+  return (
+    <span
+      className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${styles}`}
+    >
+      {label}
+    </span>
   );
 }
 
@@ -412,16 +462,27 @@ function ClarifyCard({
         ) : null}
       </div>
 
-      <ul className="flex flex-col gap-3">
+      <ul className="flex flex-col gap-4">
         {uncertainties.map((u) => {
-          const { question, purpose } = splitQuestion(u.question_fr);
+          const split = splitQuestion(u.question_fr);
+          const question = split.question;
+          // Prefer explicit purpose_fr; fall back to inline "(— used to …)" parsing.
+          const purpose = u.purpose_fr?.trim() || split.purpose;
+          const instruction = u.instruction_fr?.trim() || null;
+          const placeholder = u.placeholder_fr?.trim() || 'Type your answer…';
           const current = answers[u.field] ?? '';
           return (
-            <li key={u.field} className="flex flex-col gap-2">
+            <li
+              key={u.field}
+              className="flex flex-col gap-2 rounded-md border border-[color:var(--color-border)] bg-white p-3"
+            >
               <div className="flex items-start gap-1.5">
-                <p className="text-sm font-medium text-[color:var(--color-fg)]">{question}</p>
+                <p className="text-sm font-semibold text-[color:var(--color-fg)]">{question}</p>
                 {purpose ? <InfoTooltip text={purpose} /> : null}
               </div>
+              {instruction ? (
+                <p className="text-xs text-[color:var(--color-muted)]">{instruction}</p>
+              ) : null}
 
               {u.options && u.options.length > 0 ? (
                 <div className="flex flex-col gap-2">
@@ -450,7 +511,7 @@ function ClarifyCard({
                     value={u.options.includes(current) ? '' : current}
                     disabled={submitted || submitting}
                     onChange={(e) => setAnswer(u.field, e.target.value)}
-                    placeholder="…or type something else"
+                    placeholder={`…or type something else (e.g. ${placeholder})`}
                     className="rounded-md border border-[color:var(--color-border)] bg-white px-3 py-1.5 text-sm text-[color:var(--color-fg)] outline-none transition focus:border-[color:var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-70"
                   />
                 </div>
@@ -460,7 +521,7 @@ function ClarifyCard({
                   value={current}
                   disabled={submitted || submitting}
                   onChange={(e) => setAnswer(u.field, e.target.value)}
-                  placeholder="Type your answer…"
+                  placeholder={placeholder}
                   className="rounded-md border border-[color:var(--color-border)] bg-white px-3 py-1.5 text-sm text-[color:var(--color-fg)] outline-none transition focus:border-[color:var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-70"
                 />
               )}

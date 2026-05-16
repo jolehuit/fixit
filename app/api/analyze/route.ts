@@ -58,32 +58,44 @@ Example:
 "Defect: active water leak ; located at: the upper slip-joint nut between the sink strainer outlet and the trap inlet (top of the assembly, ~3cm below the sink basin) ; severity: moderate (steady visible drip into the cabinet floor) ; visible signs: vertical water trail along the white trap body, glistening film around the upper slip nut, towel below partially saturated"
 
 PHASE 4 — SPARE-PARTS UNCERTAINTIES:
-Return up to 3 uncertainties that genuinely block ordering the correct replacement part. Quality > quantity.
+Return between 4 and 6 uncertainties when the object has any technical specs that affect part selection. Aim for thorough technical disambiguation, not just minimum viable.
 
-For EACH uncertainty:
-- "field" is a snake_case key downstream steps will use to look up the answer.
-- "question_fr" is the user-facing question. Format strictly as:
-  "<short direct English question> (— used to <one-line purpose>)"
-  Examples:
-    "Which exact iPhone model? (— used to pick the correct display assembly P/N)"
-    "What is the trap diameter? (— used to size the slip washer and replacement nut)"
+Coverage rule per object family — try to fill ALL of these dimensions when applicable:
+- Bicycle → wheel size, tire size (ETRTO or sidewall code), valve type, brake type (rim/disc), drivetrain speeds, tube/tire variant (clincher/tubeless), frame size if relevant
+- Phone/laptop → exact model, storage, color/finish, generation/year, region, battery health if guessable
+- Plumbing → pipe diameter, thread/standard (BSP/NPT/metric), trap shape, fitting type, water-supply type
+- Appliance → model number, voltage/region, power rating, capacity, color/finish
+- Furniture → wood type, dimensions, joinery type, finish, brand/line
+
+For EACH uncertainty, populate THESE fields (all text in English, the "_fr" suffix is legacy):
+- "field": snake_case key downstream steps use to look up the answer (e.g. "tire_size_etrto", "valve_type").
+- "question_fr": ONE short, direct question to the user. ≤12 words, ends with "?". No purpose clause inside this string anymore.
+  Examples: "What's your tire size?", "Which valve type does the tube use?", "Rim brake or disc brake?"
+- "purpose_fr": ONE short sentence (≤16 words) explaining WHY this answer matters — shown to the user as helper text.
+  Examples: "Used to order the correct inner tube.", "Determines the pump head and replacement valve.", "Picks compatible brake pads or rotors."
+- "instruction_fr": ONE short sentence (≤16 words) telling the user HOW to find the answer. Optional but recommended.
+  Examples: "Check the sidewall of your tire for a code like 26x1.95 or 700x32C.", "Look at the valve stem — Presta is narrow and threaded, Schrader is wider like a car valve."
+- "placeholder_fr": A realistic example value for the free-text input. ≤24 chars.
+  Examples: "26x1.95", "Presta", "iPhone 13 Pro", "32 mm".
 - "options": **always populate 3 options** when the field has KNOWN common candidates in the domain (iPhones, common tire sizes, common voltages, standard pipe diameters, etc.). Pick the 3 MOST LIKELY values based on the photo + general knowledge. The UI ALSO renders a free-text fallback under the buttons, so options are never a hard restriction — they're shortcuts for the common case. Each option ≤3 words. Examples of when to populate:
     * iPhone model → top 3 candidates from the visible generation cluster (e.g. ["iPhone 11", "iPhone 12", "iPhone 13"])
     * Drain diameter (EU) → ["32 mm", "40 mm", "50 mm"]
     * Tire valve type → ["Schrader", "Presta", "Dunlop"]
     * Bike wheel size → ["26 in", "27.5 in", "29 in"]
+    * Bike tire width → ["1.95 in", "2.10 in", "2.25 in"]
+    * Brake system → ["Rim (V-brake)", "Disc (mech.)", "Disc (hyd.)"]
   OMIT "options" only when the answer space is truly unbounded (a free serial number, a textual model code with no realistic 3-cluster, a measured value with no standard increments).
 
 Examples of useful uncertainty fields (use what fits the object, do not force all):
 - exact_model_number, brand_model, variant_or_generation
 - purchase_year, production_year, region_or_market
-- tire_size_etrto, wheel_diameter, valve_type
-- trap_diameter_mm, hose_diameter_mm, thread_type
+- tire_size_etrto, tire_width, wheel_diameter, valve_type, brake_system, drivetrain_speeds
+- trap_diameter_mm, hose_diameter_mm, thread_type, fitting_standard
 - battery_capacity_mah, voltage, power_rating_watts
 - storage_capacity, color_or_finish
 - visible_serial_number, label_code
 
-Do NOT invent uncertainties to look thorough. Empty array if the photo + transcript already determine the part.
+Quality > quantity, but err on the side of MORE thoroughness for repair domains where small spec mismatches break the fix (bikes especially). Empty array only when there is genuinely nothing left to disambiguate.
 
 OTHER REQUIRED FIELDS:
 - "category" must be exactly one of: vehicle, electronics, plumbing, furniture, other.

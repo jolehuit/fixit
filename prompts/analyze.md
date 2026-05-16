@@ -19,14 +19,21 @@ The model reasons through 4 phases silently and emits only the final JSON.
    ```
    Defect: <X> ; located at: <precise sub-component / position> ; severity: <minor|moderate|severe> ; visible signs: <observed symptoms>
    ```
-4. **SPARE-PARTS UNCERTAINTIES.** Up to 3 entries. For each:
+4. **SPARE-PARTS UNCERTAINTIES.** Aim for **4 to 6 entries** whenever the object has technical specs that affect part selection. Per-family coverage rule:
+   - **Bicycle** → wheel size, tire size (ETRTO/sidewall), valve type, brake type (rim vs disc), drivetrain speeds, tire/tube variant (clincher/tubeless).
+   - **Phone/laptop** → exact model, storage, color/finish, generation/year, region.
+   - **Plumbing** → pipe diameter, thread/standard, trap shape, fitting type, water supply.
+   - **Appliance** → model number, voltage/region, power rating, capacity, color.
+   - **Furniture** → wood type, dimensions, joinery type, finish, brand/line.
+
+   For each entry:
    - `field` is a snake_case key (downstream lookup).
    - `question_fr` MUST follow the format: `"<short direct English question> (— used to <one-line purpose>)"`. The purpose clause is mandatory; it is what clarify will polish and what the UI can show as helper text.
-   - `options`: include 1–3 strings (≤3 words each) only when ≤3 candidates are realistically enumerable. Otherwise omit — the UI renders a free-text input.
+   - `options`: **always populate 3 options** when there are KNOWN common candidates (iPhone model, tire size, valve type, etc.). The UI renders a free-text input as fallback under the buttons. Omit only when truly unbounded.
 
 ## Useful uncertainty fields (non-exhaustive, fit to the object)
 
-`exact_model_number`, `brand_model`, `variant_or_generation`, `purchase_year`, `production_year`, `region_or_market`, `tire_size_etrto`, `wheel_diameter`, `valve_type`, `trap_diameter_mm`, `hose_diameter_mm`, `thread_type`, `battery_capacity_mah`, `voltage`, `power_rating_watts`, `storage_capacity`, `color_or_finish`, `visible_serial_number`, `label_code`.
+`exact_model_number`, `brand_model`, `variant_or_generation`, `purchase_year`, `production_year`, `region_or_market`, `tire_size_etrto`, `tire_width`, `wheel_diameter`, `valve_type`, `brake_system`, `drivetrain_speeds`, `trap_diameter_mm`, `hose_diameter_mm`, `thread_type`, `fitting_standard`, `battery_capacity_mah`, `voltage`, `power_rating_watts`, `storage_capacity`, `color_or_finish`, `visible_serial_number`, `label_code`.
 
 ## User prompt template
 

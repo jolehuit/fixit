@@ -30,8 +30,17 @@ export type DemoId = z.infer<typeof DemoId>;
 // ---------- Vision analysis ----------
 
 export const Uncertainty = z.object({
+  /** snake_case key downstream steps use to look up the answer */
   field: z.string(),
+  /** Short user-facing question (legacy field name kept for compat). */
   question_fr: z.string(),
+  /** Why this answer matters (one-liner shown as helper / tooltip). Optional. */
+  purpose_fr: z.string().optional(),
+  /** How to answer (free text guidance shown under the question). Optional. */
+  instruction_fr: z.string().optional(),
+  /** Example placeholder for the free-text input. Optional. */
+  placeholder_fr: z.string().optional(),
+  /** 3 quick-pick candidates when known. Free text input is always available too. */
   options: z.array(z.string()).max(3).optional(),
 });
 export type Uncertainty = z.infer<typeof Uncertainty>;
