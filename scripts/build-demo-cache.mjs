@@ -23,10 +23,17 @@
  *     --base-url http://localhost:3000
  */
 
-import { readFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import { basename, extname, resolve } from 'node:path';
 import { fal } from '@fal-ai/client';
 import { put } from '@vercel/blob';
+import { Agent, setGlobalDispatcher } from 'undici';
+
+// Bump the default 5-min headers timeout — Seedance image-to-video routinely
+// runs 4-8 min and crashes the script with UND_ERR_HEADERS_TIMEOUT otherwise.
+setGlobalDispatcher(
+  new Agent({ headersTimeout: 15 * 60_000, bodyTimeout: 15 * 60_000 }),
+);
 
 // ---------- args ----------
 const args = process.argv.slice(2);
@@ -49,6 +56,8 @@ const KNOWN_DEMOS = {
 const baseUrl = (getFlag('--base-url', 'http://localhost:3000')).replace(/\/$/, '');
 const photoPath = resolve(getFlag('--photo', KNOWN_DEMOS[demoId]));
 const sourceDir = resolve(`scripts/demo-sources/${demoId}`);
+const resumePath = getFlag('--resume', null);
+const progressPath = getFlag('--progress-out', `/tmp/fixit-progress-${demoId}.json`);
 
 // ---------- env (only required for real runs; --dry skips the API entirely) ----------
 const FAL_KEY = process.env.FAL_KEY;
@@ -192,56 +201,116 @@ async function probeDevServer() {
 
   log(`photo: ${photoPath}`);
   log(`base url: ${baseUrl}`);
-  log(`uploading reference photo to fal CDN…`);
-  const photoUrl = await uploadPhotoToFal(photoPath);
-  log(`photo URL: ${photoUrl}`);
+  // Load resume state if any. Resume shape:
+  //   { photo_url, steps: [{ step_number, keyframe_start_url, keyframe_end_url,
+  //     video_url?, audio_url?, duration_seconds? }] }
+  // A step is "complete" when it has BOTH video_url + audio_url. Otherwise we
+  // generate what's missing (reusing keyframes when present).
+  let resume = { photo_url: null, steps: [] };
+  if (resumePath) {
+    try {
+      resume = JSON.parse(await readFile(resumePath, 'utf8'));
+      log(`resuming from ${resumePath} (${resume.steps.length} known step(s))`);
+    } catch (e) {
+      console.error(`Failed to read --resume ${resumePath}: ${e.message}`);
+      process.exit(4);
+    }
+  }
+  const findResumeStep = (n) => resume.steps.find((s) => s.step_number === n);
 
-  const steps = [];
+  let photoUrl;
+  if (resume.photo_url) {
+    photoUrl = resume.photo_url;
+    log(`photo URL (from resume): ${photoUrl}`);
+  } else {
+    log(`uploading reference photo to fal CDN…`);
+    photoUrl = await uploadPhotoToFal(photoPath);
+    log(`photo URL: ${photoUrl}`);
+  }
+
+  // Persist progress to disk after every step so a future crash can be resumed
+  // with --resume pointing at this same file.
+  const progress = { photo_url: photoUrl, steps: [] };
+  async function persist() {
+    await writeFile(progressPath, JSON.stringify(progress, null, 2));
+  }
+
   let prevStartKeyframe;
   for (const step of plan.steps) {
     const stepStart = Date.now();
     log(`step ${step.step_number}/${plan.steps.length}: ${step.title}`);
 
-    // 1. Start keyframe
-    log(`  → render-keyframe start…`);
-    const kfStart = await post('/api/render-keyframe', {
-      step_number: step.step_number,
-      kind: 'start',
-      reference_url: photoUrl,
-      prev_keyframe_url: prevStartKeyframe,
-      prompt: step.visual_prompt_start,
-      quality: 'high',
-      image_size: 'landscape_16_9',
-      scene_lock: plan.scene_lock,
-      subject_focus: step.subject_focus,
-      shot_type: step.shot_type,
-    });
-    log(`    ✓ ${kfStart.url}`);
+    const cached = findResumeStep(step.step_number);
+    const isComplete = cached?.video_url && cached?.audio_url;
 
-    // 2. End keyframe (anchored on start for continuity)
-    log(`  → render-keyframe end…`);
-    const kfEnd = await post('/api/render-keyframe', {
-      step_number: step.step_number,
-      kind: 'end',
-      reference_url: photoUrl,
-      prev_keyframe_url: kfStart.url,
-      prompt: step.visual_prompt_end,
-      quality: 'high',
-      image_size: 'landscape_16_9',
-      scene_lock: plan.scene_lock,
-      subject_focus: step.subject_focus,
-      shot_type: step.shot_type,
-    });
-    log(`    ✓ ${kfEnd.url}`);
-    prevStartKeyframe = kfEnd.url;
+    if (isComplete) {
+      log(`  ↻ resuming — already complete, reusing URLs`);
+      progress.steps.push({
+        step_number: step.step_number,
+        keyframe_start_url: cached.keyframe_start_url,
+        keyframe_end_url: cached.keyframe_end_url,
+        video_url: cached.video_url,
+        audio_url: cached.audio_url,
+        duration_seconds: cached.duration_seconds ?? 5,
+      });
+      prevStartKeyframe = cached.keyframe_end_url ?? prevStartKeyframe;
+      await persist();
+      log(`  step ${step.step_number} skipped in ${fmt(Date.now() - stepStart)}`);
+      continue;
+    }
+
+    // 1. Start keyframe (reuse from resume if present)
+    let kfStartUrl = cached?.keyframe_start_url;
+    if (kfStartUrl) {
+      log(`  ↻ render-keyframe start (reused): ${kfStartUrl}`);
+    } else {
+      log(`  → render-keyframe start…`);
+      const kfStart = await post('/api/render-keyframe', {
+        step_number: step.step_number,
+        kind: 'start',
+        reference_url: photoUrl,
+        prev_keyframe_url: prevStartKeyframe,
+        prompt: step.visual_prompt_start,
+        quality: 'high',
+        image_size: 'landscape_16_9',
+        scene_lock: plan.scene_lock,
+        subject_focus: step.subject_focus,
+        shot_type: step.shot_type,
+      });
+      kfStartUrl = kfStart.url;
+      log(`    ✓ ${kfStartUrl}`);
+    }
+
+    // 2. End keyframe (reuse from resume if present)
+    let kfEndUrl = cached?.keyframe_end_url;
+    if (kfEndUrl) {
+      log(`  ↻ render-keyframe end (reused): ${kfEndUrl}`);
+    } else {
+      log(`  → render-keyframe end…`);
+      const kfEnd = await post('/api/render-keyframe', {
+        step_number: step.step_number,
+        kind: 'end',
+        reference_url: photoUrl,
+        prev_keyframe_url: kfStartUrl,
+        prompt: step.visual_prompt_end,
+        quality: 'high',
+        image_size: 'landscape_16_9',
+        scene_lock: plan.scene_lock,
+        subject_focus: step.subject_focus,
+        shot_type: step.shot_type,
+      });
+      kfEndUrl = kfEnd.url;
+      log(`    ✓ ${kfEndUrl}`);
+    }
+    prevStartKeyframe = kfEndUrl;
 
     // 3. Animate + narrate in parallel
     log(`  → animate-step + narrate (parallel)…`);
     const [anim, narr] = await Promise.all([
       post('/api/animate-step', {
         step_number: step.step_number,
-        start_frame_url: kfStart.url,
-        end_frame_url: kfEnd.url,
+        start_frame_url: kfStartUrl,
+        end_frame_url: kfEndUrl,
         motion_prompt: step.motion_prompt,
         duration_seconds: 5,
         resolution: '720p',
@@ -258,17 +327,19 @@ async function probeDevServer() {
     log(`    ✓ anim: ${anim.url}`);
     log(`    ✓ narr: ${narr.url} (${narr.duration_seconds}s)`);
 
-    steps.push({
+    progress.steps.push({
       step_number: step.step_number,
-      keyframe_start_url: kfStart.url,
-      keyframe_end_url: kfEnd.url,
+      keyframe_start_url: kfStartUrl,
+      keyframe_end_url: kfEndUrl,
       video_url: anim.url,
       audio_url: narr.url,
       duration_seconds: Math.max(narr.duration_seconds, anim.duration_seconds ?? 5),
     });
+    await persist();
 
     log(`  step ${step.step_number} done in ${fmt(Date.now() - stepStart)}`);
   }
+  const steps = progress.steps;
 
   // 4. Build + upload manifest
   const manifest = {
