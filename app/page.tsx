@@ -12,15 +12,27 @@ export default function HomePage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-white">
-      <header className="border-b border-[color:var(--color-border)]">
+      <header className="sticky top-0 z-10 border-b border-[color:var(--color-border)] bg-white/85 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
           <button
             type="button"
             onClick={() => setMode('choose')}
-            className="flex items-center gap-2"
+            className="flex items-center gap-1"
             aria-label="Back to home"
           >
-            <img src="/logo.webp" alt="fixit" className="h-10 w-auto" />
+            <span className="relative inline-flex h-12 w-12 shrink-0 items-center justify-start overflow-hidden">
+              {/* biome-ignore lint/performance/noImgElement: tiny static brand mark */}
+              <img
+                src="/logo.webp"
+                alt=""
+                aria-hidden
+                className="h-full w-auto max-w-none"
+              />
+            </span>
+            <span className="text-3xl font-bold leading-none tracking-tight text-[color:var(--color-fg)] sm:text-4xl">
+              <span>Fix</span>
+              <span className="text-[color:var(--color-accent)]">IT</span>
+            </span>
           </button>
           {mode !== 'choose' ? (
             <button
@@ -34,7 +46,7 @@ export default function HomePage() {
         </div>
       </header>
 
-      <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col justify-center px-6 py-6">
+      <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-6 py-10 sm:py-14">
         {mode === 'choose' ? <ChooserView onPick={setMode} /> : null}
         {mode === 'demo' ? <DemoView /> : null}
         {mode === 'upload' ? <UploadView /> : null}
@@ -52,29 +64,65 @@ export default function HomePage() {
 function ChooserView({ onPick }: { onPick: (m: Mode) => void }) {
   return (
     <>
-      <section className="mb-8 flex max-w-3xl flex-col gap-2">
-        <h1 className="text-balance text-2xl font-bold leading-tight text-[color:var(--color-fg)] sm:text-3xl">
-          Snap a photo, get a repair video.
+      <section className="relative mb-12 flex flex-col items-start gap-5 sm:mb-16">
+        <span className="inline-flex items-center gap-2 rounded-full border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 py-1 text-xs font-semibold uppercase tracking-wider text-[color:var(--color-accent)]">
+          <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-[color:var(--color-accent)]" />
+          AI repair assistant
+        </span>
+        <h1 className="text-balance text-4xl font-bold leading-[1.05] text-[color:var(--color-fg)] sm:text-6xl">
+          Snap a photo.{' '}
+          <span className="text-[color:var(--color-accent)]">Get a repair video</span>
+          <span className="text-[color:var(--color-muted)]">.</span>
         </h1>
-        <p className="text-sm text-[color:var(--color-muted)] sm:text-base">
-          Pick a sample demo or upload your own photo to start.
+        <p className="max-w-xl text-base text-[color:var(--color-muted)] sm:text-lg">
+          Show us what's broken. Our AI looks at your photo, asks a couple of clarifying
+          questions, and walks you through the fix — step by step, in 90 seconds.
         </p>
       </section>
+
+      <section className="mb-12 grid gap-4 sm:mb-16 sm:grid-cols-3">
+        <Stepper number={1} title="Snap" body="Upload or pick a sample photo of the issue." />
+        <Stepper number={2} title="Confirm" body="The AI identifies the part and the defect." />
+        <Stepper
+          number={3}
+          title="Watch"
+          body="A guided video shows the fix, step by step."
+        />
+      </section>
+
       <section className="grid gap-4 sm:grid-cols-2">
         <ChooserCard
           onClick={() => onPick('demo')}
-          title="Demo mode"
-          subtitle="See 3 guided sample repairs"
+          title="Try a sample"
+          subtitle="3 guided demos — flat tire, cracked screen, dripping faucet."
           icon={<DemoIcon />}
+          tone="secondary"
+          cta="Browse demos"
         />
         <ChooserCard
           onClick={() => onPick('upload')}
-          title="Try your own"
-          subtitle="Upload a photo of what's broken"
+          title="Upload your own"
+          subtitle="Take or upload a photo of what's broken at home."
           icon={<UploadIcon />}
+          tone="secondary"
+          cta="Start upload"
         />
       </section>
     </>
+  );
+}
+
+function Stepper({ number, title, body }: { number: number; title: string; body: string }) {
+  return (
+    <div className="flex items-start gap-3 rounded-xl border border-[color:var(--color-border)] bg-white p-4">
+      <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[color:var(--color-accent)] text-xs font-semibold text-white">
+        {number}
+      </span>
+      <div className="flex flex-col gap-0.5">
+        <span className="text-sm font-semibold text-[color:var(--color-fg)]">{title}</span>
+        <span className="text-sm text-[color:var(--color-muted)]">{body}</span>
+      </div>
+    </div>
   );
 }
 
@@ -83,25 +131,56 @@ function ChooserCard({
   title,
   subtitle,
   icon,
+  tone,
+  cta,
 }: {
   onClick: () => void;
   title: string;
   subtitle: string;
   icon: React.ReactNode;
+  tone: 'primary' | 'secondary';
+  cta: string;
 }) {
+  const isPrimary = tone === 'primary';
   return (
     <button
       type="button"
       onClick={onClick}
-      className="group flex flex-col gap-3 overflow-hidden rounded-xl border border-[color:var(--color-border)] bg-white p-8 text-left transition hover:-translate-y-0.5 hover:border-[color:var(--color-border-strong)] hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--color-accent)]"
+      className={
+        isPrimary
+          ? 'group flex flex-col gap-3 overflow-hidden rounded-2xl bg-[color:var(--color-accent)] p-8 text-left text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-[color:var(--color-accent-hover)] hover:shadow-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--color-accent)]'
+          : 'group flex flex-col gap-3 overflow-hidden rounded-2xl border border-[color:var(--color-border)] bg-white p-8 text-left transition hover:-translate-y-0.5 hover:border-[color:var(--color-border-strong)] hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--color-accent)]'
+      }
     >
-      <span className="inline-flex h-12 w-12 items-center justify-center rounded-lg bg-[color:var(--color-surface)] text-[color:var(--color-accent)] transition group-hover:scale-105">
+      <span
+        className={
+          isPrimary
+            ? 'inline-flex h-12 w-12 items-center justify-center rounded-lg bg-white/15 text-white transition group-hover:scale-105'
+            : 'inline-flex h-12 w-12 items-center justify-center rounded-lg bg-[color:var(--color-surface)] text-[color:var(--color-accent)] transition group-hover:scale-105'
+        }
+      >
         {icon}
       </span>
-      <span className="mt-2 text-xl font-semibold text-[color:var(--color-fg)]">{title}</span>
-      <span className="text-sm text-[color:var(--color-muted)]">{subtitle}</span>
-      <span className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-[color:var(--color-accent)] transition group-hover:gap-2">
-        Choose
+      <span
+        className={`mt-2 text-xl font-semibold ${
+          isPrimary ? 'text-white' : 'text-[color:var(--color-fg)]'
+        }`}
+      >
+        {title}
+      </span>
+      <span
+        className={`text-sm ${
+          isPrimary ? 'text-white/85' : 'text-[color:var(--color-muted)]'
+        }`}
+      >
+        {subtitle}
+      </span>
+      <span
+        className={`mt-2 inline-flex items-center gap-1 text-sm font-medium transition group-hover:gap-2 ${
+          isPrimary ? 'text-white' : 'text-[color:var(--color-accent)]'
+        }`}
+      >
+        {cta}
         <span aria-hidden>→</span>
       </span>
     </button>
@@ -111,12 +190,16 @@ function ChooserCard({
 function DemoView() {
   return (
     <section>
-      <div className="mb-6 flex flex-col gap-1">
-        <h2 className="text-xl font-semibold text-[color:var(--color-fg)] sm:text-2xl">
+      <div className="mb-8 flex flex-col gap-1.5">
+        <span className="text-xs font-semibold uppercase tracking-wider text-[color:var(--color-accent)]">
+          Demo mode
+        </span>
+        <h2 className="text-2xl font-bold text-[color:var(--color-fg)] sm:text-3xl">
           Pick a sample repair
         </h2>
-        <p className="text-sm text-[color:var(--color-muted)]">
-          Each demo runs the full live pipeline on a pre-shot photo.
+        <p className="max-w-xl text-sm text-[color:var(--color-muted)]">
+          Each demo runs the full live pipeline on a pre-shot photo — analyze, clarify, plan
+          and generate a step-by-step video.
         </p>
       </div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -130,7 +213,18 @@ function DemoView() {
 
 function UploadView() {
   return (
-    <section className="mx-auto w-full max-w-xs">
+    <section className="mx-auto flex w-full max-w-md flex-col gap-6">
+      <div className="flex flex-col gap-1.5">
+        <span className="text-xs font-semibold uppercase tracking-wider text-[color:var(--color-accent)]">
+          Live mode
+        </span>
+        <h2 className="text-2xl font-bold text-[color:var(--color-fg)] sm:text-3xl">
+          Upload your photo
+        </h2>
+        <p className="text-sm text-[color:var(--color-muted)]">
+          A clear, well-lit close-up of the issue works best.
+        </p>
+      </div>
       <PhotoUpload />
     </section>
   );
