@@ -2,14 +2,24 @@
 
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Suspense, use, useState } from 'react';
+import { Suspense, use, useEffect, useState } from 'react';
 import { ChatThread } from '@/components/ChatThread';
+import { LiveProgress } from '@/components/LiveProgress';
 import { VideoModal } from '@/components/VideoModal';
 import { demos } from '@/lib/demos';
 import { demoLabels, problemMarker } from '@/lib/i18n';
 import { DemoId } from '@/lib/types';
 
 function JobInner({ jobId }: { jobId: string }) {
+  const search = useSearchParams();
+  const mode = search.get('mode');
+  if (mode === 'live') return <LiveJob jobId={jobId} />;
+  return <CachedJob jobId={jobId} />;
+}
+
+// ---- Cached demo path (existing flow, untouched) ----
+
+function CachedJob({ jobId }: { jobId: string }) {
   const search = useSearchParams();
   const demoParam = search.get('demo');
   const parsed = DemoId.safeParse(demoParam);
@@ -124,6 +134,76 @@ function JobInner({ jobId }: { jobId: string }) {
           title={`${labels.title} — ${marker.label}`}
           onClose={() => setModalOpen(false)}
         />
+      ) : null}
+    </>
+  );
+}
+
+// ---- Live path (user-uploaded photo, real SSE pipeline) ----
+
+function LiveJob({ jobId }: { jobId: string }) {
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [imageFailed, setImageFailed] = useState(false);
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
+
+  // sessionStorage is client-only; read after hydration.
+  useEffect(() => {
+    try {
+      setPhotoUrl(sessionStorage.getItem(`photo:${jobId}`));
+    } catch {
+      setPhotoUrl(null);
+    }
+  }, [jobId]);
+
+  return (
+    <>
+      <div className="grid gap-8 lg:grid-cols-[1.15fr_1fr] lg:gap-12">
+        <aside className="flex flex-col gap-4 lg:sticky lg:top-24 lg:self-start">
+          <div className="flex items-center gap-3 text-sm text-[color:var(--color-muted)]">
+            <span className="font-semibold uppercase tracking-wider text-[color:var(--color-accent)]">
+              Live pipeline
+            </span>
+            <span>·</span>
+            <span>Your photo</span>
+          </div>
+          <h1 className="text-balance text-2xl font-bold leading-tight sm:text-3xl">
+            Diagnosing your repair
+          </h1>
+          <div className="relative aspect-[4/3] w-full overflow-hidden rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-surface)]">
+            {!photoUrl || imageFailed ? (
+              <div className="flex h-full w-full items-center justify-center px-4 text-center">
+                <span className="text-sm text-[color:var(--color-muted)]">
+                  Photo preview unavailable (session reset).
+                </span>
+              </div>
+            ) : (
+              // biome-ignore lint/performance/noImgElement: native img + onError fallback
+              <img
+                src={photoUrl}
+                alt="Uploaded for diagnosis"
+                onError={() => setImageFailed(true)}
+                className="h-full w-full object-cover"
+              />
+            )}
+          </div>
+          <p className="text-sm text-[color:var(--color-muted)]">
+            Your photo feeds the full live pipeline. Each stage's output appears on the right as it
+            completes.
+          </p>
+        </aside>
+
+        <section className="min-h-0">
+          <LiveProgress
+            jobId={jobId}
+            onVideoReady={setVideoUrl}
+            onOpenVideo={() => setModalOpen(true)}
+          />
+        </section>
+      </div>
+
+      {modalOpen && videoUrl ? (
+        <VideoModal url={videoUrl} title="Your repair video" onClose={() => setModalOpen(false)} />
       ) : null}
     </>
   );

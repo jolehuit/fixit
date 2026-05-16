@@ -1,4 +1,5 @@
 import { DemoCard } from '@/components/DemoCard';
+import { PhotoUpload } from '@/components/PhotoUpload';
 import { demoList } from '@/lib/demos';
 
 export default function HomePage() {
@@ -48,6 +49,16 @@ export default function HomePage() {
               <DemoCard key={demo.id} demo={demo} />
             ))}
           </div>
+        </section>
+
+        <section className="mt-16 sm:mt-20">
+          <div className="mb-6 flex items-end justify-between gap-4">
+            <h2 className="text-xl font-semibold text-[color:var(--color-fg)]">
+              Try with your own photo
+            </h2>
+            <span className="text-sm text-[color:var(--color-muted)]">Real-time live pipeline</span>
+          </div>
+          <PhotoUpload />
         </section>
       </main>
 
