@@ -4,14 +4,16 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { use, useState } from 'react';
 import { demos } from '@/lib/demos';
-import { demoLabels } from '@/lib/i18n';
 import { DemoId, type RunResponse } from '@/lib/types';
+
+type Phase = 'idle' | 'encoding' | 'starting' | 'error';
 
 export default function DemoIntroPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
   const { id } = use(params);
-  const [phase, setPhase] = useState<'idle' | 'uploading' | 'starting'>('idle');
+  const [phase, setPhase] = useState<Phase>('idle');
   const [imageFailed, setImageFailed] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const parsed = DemoId.safeParse(id);
   if (!parsed.success) {
@@ -31,26 +33,48 @@ export default function DemoIntroPage({ params }: { params: Promise<{ id: string
   }
   const demoId = parsed.data;
   const demo = demos[demoId];
-  const labels = demoLabels[demoId];
 
-  const attach = async () => {
-    setPhase('uploading');
-    await new Promise((r) => setTimeout(r, 1300));
-    setPhase('starting');
-
+  // Demo cards now run the SAME live pipeline as user uploads. We fetch the
+  // pre-shot photo, encode it as a data URL (so OpenAI can read its bytes
+  // rather than try to fetch localhost), then POST /api/run live.
+  const start = async () => {
+    setErrorMsg(null);
+    setPhase('encoding');
     try {
-      const res = await fetch('/api/run', {
+      const res = await fetch(demo.photo_url);
+      if (!res.ok) throw new Error(`Could not load demo photo (${res.status})`);
+      const blob = await res.blob();
+      const dataUrl: string = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () =>
+          typeof reader.result === 'string'
+            ? resolve(reader.result)
+            : reject(new Error('Reader returned non-string'));
+        reader.onerror = () => reject(reader.error ?? new Error('FileReader failed'));
+        reader.readAsDataURL(blob);
+      });
+
+      setPhase('starting');
+      const runRes = await fetch('/api/run', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ demo_id: demoId }),
+        body: JSON.stringify({ photo_url: dataUrl, transcript_fr: demo.transcript_fr }),
       });
-      if (!res.ok) throw new Error('run failed');
-      const data = (await res.json()) as RunResponse;
-      router.push(`/job/${data.job_id}?demo=${demoId}`);
-    } catch {
-      setPhase('idle');
+      if (!runRes.ok) {
+        const text = await runRes.text().catch(() => '');
+        throw new Error(`POST /api/run failed (${runRes.status}): ${text.slice(0, 200)}`);
+      }
+      const data = (await runRes.json()) as RunResponse;
+      // Photo is stored server-side by /api/run — the job page fetches it
+      // via /api/jobs/<id>/photo. No client-side storage required.
+      router.push(`/job/${data.job_id}?mode=live&demo=${demoId}`);
+    } catch (err) {
+      setPhase('error');
+      setErrorMsg(err instanceof Error ? err.message : 'Could not start the pipeline.');
     }
   };
+
+  const busy = phase === 'encoding' || phase === 'starting';
 
   return (
     <div className="min-h-screen bg-white">
@@ -71,22 +95,15 @@ export default function DemoIntroPage({ params }: { params: Promise<{ id: string
       <main className="mx-auto max-w-3xl px-6 py-16 sm:py-24">
         <div className="flex flex-col items-center gap-8 text-center">
           <span className="text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--color-accent)]">
-            {labels.category} · {labels.difficulty}
+            {demo.category} · {demo.difficulty}
           </span>
           <h1 className="max-w-xl text-balance text-3xl font-bold leading-tight text-[color:var(--color-fg)] sm:text-4xl">
-            {labels.title}
+            {demo.title}
           </h1>
-          <p className="max-w-lg text-[color:var(--color-muted)]">{labels.intro}</p>
+          <p className="max-w-lg text-[color:var(--color-muted)]">{demo.intro}</p>
 
           <div className="relative mt-2 aspect-[4/3] w-full max-w-md overflow-hidden rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-surface)]">
-            {phase === 'idle' ? (
-              <div className="flex h-full w-full flex-col items-center justify-center gap-3 px-6 text-center">
-                <CameraIcon />
-                <span className="text-sm text-[color:var(--color-muted)]">
-                  A clear, well-lit photo works best
-                </span>
-              </div>
-            ) : imageFailed ? (
+            {imageFailed ? (
               <div className="flex h-full w-full items-center justify-center">
                 <span aria-hidden className="text-7xl opacity-70">
                   {demo.emoji}
@@ -96,12 +113,12 @@ export default function DemoIntroPage({ params }: { params: Promise<{ id: string
               // biome-ignore lint/performance/noImgElement: native img keeps the onError fallback path simple
               <img
                 src={demo.photo_url}
-                alt={labels.short}
+                alt={demo.short}
                 onError={() => setImageFailed(true)}
                 className="h-full w-full animate-[fade-in_400ms_ease-out] object-cover"
               />
             )}
-            {phase !== 'idle' ? (
+            {busy ? (
               <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-3 border-t border-[color:var(--color-border)] bg-white/95 p-3 text-sm backdrop-blur">
                 <span className="inline-flex items-end gap-1">
                   <span className="h-1.5 w-1.5 animate-[dot_1.2s_ease-in-out_infinite] rounded-full bg-[color:var(--color-accent)]" />
@@ -109,7 +126,7 @@ export default function DemoIntroPage({ params }: { params: Promise<{ id: string
                   <span className="h-1.5 w-1.5 animate-[dot_1.2s_ease-in-out_-0.4s_infinite] rounded-full bg-[color:var(--color-accent)]" />
                 </span>
                 <span className="text-[color:var(--color-fg)]">
-                  {phase === 'uploading' ? 'Uploading your photo' : 'Starting diagnosis'}
+                  {phase === 'encoding' ? 'Preparing photo' : 'Starting pipeline'}
                 </span>
               </div>
             ) : null}
@@ -117,46 +134,23 @@ export default function DemoIntroPage({ params }: { params: Promise<{ id: string
 
           <button
             type="button"
-            onClick={attach}
-            disabled={phase !== 'idle'}
+            onClick={start}
+            disabled={busy}
             className="inline-flex items-center gap-2 rounded-md bg-[color:var(--color-accent)] px-6 py-3 text-base font-semibold text-white shadow-sm transition hover:bg-[color:var(--color-accent-hover)] disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {phase === 'idle' ? (
-              <>
-                <CameraIcon small /> Attach a photo
-              </>
-            ) : (
-              'Uploading…'
-            )}
+            {busy ? 'Starting…' : 'Run the diagnosis'}
           </button>
           <p className="text-xs text-[color:var(--color-subtle)]">
-            For this demo, we use a sample photo. Your photo would replace it in production.
+            Same pipeline as the upload — uses our pre-shot photo + voice transcript.
           </p>
+          {phase === 'error' && errorMsg ? (
+            <div className="w-full rounded-md border border-[color:var(--color-danger)]/40 bg-[color:var(--color-danger)]/5 px-4 py-3 text-sm text-[color:var(--color-danger)]">
+              <strong className="font-semibold">Couldn't start the pipeline.</strong>
+              <span className="ml-1">{errorMsg}</span>
+            </div>
+          ) : null}
         </div>
       </main>
     </div>
-  );
-}
-
-function CameraIcon({ small }: { small?: boolean }) {
-  const size = small ? 18 : 36;
-  return (
-    <svg
-      aria-hidden="true"
-      role="img"
-      viewBox="0 0 24 24"
-      width={size}
-      height={size}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={small ? '' : 'text-[color:var(--color-subtle)]'}
-    >
-      <title>Camera</title>
-      <path d="M3 8.5a2 2 0 0 1 2-2h2l1.5-2h7L17 6.5h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-9Z" />
-      <circle cx="12" cy="13" r="3.5" />
-    </svg>
   );
 }

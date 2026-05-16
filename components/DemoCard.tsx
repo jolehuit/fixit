@@ -3,12 +3,10 @@
 import { useRouter } from 'next/navigation';
 import { useCallback, useRef } from 'react';
 import type { DemoMeta } from '@/lib/demos';
-import { demoLabels } from '@/lib/i18n';
 
 export function DemoCard({ demo }: { demo: DemoMeta }) {
   const router = useRouter();
   const preloaded = useRef(false);
-  const labels = demoLabels[demo.id];
 
   const preload = useCallback(() => {
     if (preloaded.current) return;
@@ -37,15 +35,15 @@ export function DemoCard({ demo }: { demo: DemoMeta }) {
       </div>
       <div className="flex flex-1 flex-col gap-2 px-5 py-4">
         <span className="text-xs font-semibold uppercase tracking-wider text-[color:var(--color-accent)]">
-          {labels.category}
+          {demo.category}
         </span>
-        <h3 className="text-lg font-semibold text-[color:var(--color-fg)]">{labels.title}</h3>
+        <h3 className="text-lg font-semibold text-[color:var(--color-fg)]">{demo.title}</h3>
         <div className="mt-1 flex items-center gap-4 text-sm text-[color:var(--color-muted)]">
           <span className="inline-flex items-center gap-1.5">
-            <Dot /> {labels.difficulty}
+            <Dot /> {demo.difficulty}
           </span>
           <span className="inline-flex items-center gap-1.5">
-            <Clock /> {labels.estimatedTime}
+            <Clock /> {demo.estimatedTime}
           </span>
         </div>
         <span className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-[color:var(--color-accent)] transition group-hover:gap-2">

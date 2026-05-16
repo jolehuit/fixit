@@ -2,29 +2,74 @@
  * POST /api/run
  * Owner: Role D
  *
- * Two paths:
- *   A) demo_id → replay a cached SSE script (guaranteed wow effect for jury)
- *   B) photo_url + transcript → real pipeline:
- *        analyze → (clarify) → plan → ∥ per-step(keyframe×2 + animate + narrate) → stitch
+ * Single path — live pipeline:
+ *   analyze → (clarify) → plan → ∥ per-step(keyframe×2 + animate + narrate) → stitch
+ *
+ * The previous cached-SSE-script path was removed: it emitted stale mock
+ * data that no longer matches the structured English output of the real
+ * pipeline. A proper perceptual-hash cache router will replace it later.
+ * For now, demo cards run the same live pipeline as user uploads (the
+ * client encodes the pre-shot photo into a data URL before posting).
  */
 
 import { NextResponse } from 'next/server';
-import { demoScripts, demos } from '@/lib/demos';
-import { closeJob, createJob, emit, newJobId } from '@/lib/jobs';
+import { closeJob, createJob, emit, newJobId, setPhoto, waitForClarify } from '@/lib/jobs';
 import {
   type AnalyzeResult,
+  type ClarifyAnswer,
   type RepairPlan,
   type RepairStep,
-  type StitchClip,
   RunRequest,
   RunResponse,
-  type StreamEvent,
+  type StitchClip,
 } from '@/lib/types';
+
+/** How long the orchestrator pauses on clarify_needed for user answers. */
+const CLARIFY_WAIT_MS = 45_000;
+
+/**
+ * Iteration toggle: when true, the orchestrator stops right after `plan_done`
+ * (no keyframes / animate / narrate / stitch). Keeps fal/Gradium credits intact
+ * while we audit the generated script in the dev terminal. Flip to `false`
+ * once the prompts are good enough to commit to a full video run.
+ */
+const SKIP_VIDEO_GENERATION = true;
+
+/** Pretty-print the full repair plan to the dev terminal before generation. */
+function logRepairPlan(jobId: string, plan: RepairPlan): void {
+  const sep = '─'.repeat(72);
+  const lines: string[] = [
+    '',
+    sep,
+    `[plan] job=${jobId}`,
+    `  summary    : ${plan.problem_summary_fr}`,
+    `  difficulty : ${plan.difficulty}`,
+    `  duration   : ~${plan.total_duration_min} min`,
+    `  steps      : ${plan.steps.length}`,
+    sep,
+  ];
+  for (const s of plan.steps) {
+    lines.push(`Step ${s.step_number} — ${s.title_fr} (${s.duration_seconds}s)`);
+    lines.push(`  description : ${s.description_fr}`);
+    if (s.parts_needed.length) {
+      lines.push(`  parts       : ${s.parts_needed.join(', ')}`);
+    }
+    if (s.tools_needed.length) {
+      lines.push(`  tools       : ${s.tools_needed.join(', ')}`);
+    }
+    lines.push(`  visual.start: ${s.visual_prompt_start}`);
+    lines.push(`  visual.end  : ${s.visual_prompt_end}`);
+    lines.push(`  motion      : ${s.motion_prompt}`);
+    lines.push(`  narration   : ${s.narration_fr}`);
+    lines.push('');
+  }
+  lines.push(sep);
+  // Single console.log so the block stays atomic in concurrent runs.
+  console.log(lines.join('\n'));
+}
 
 export const runtime = 'nodejs';
 export const maxDuration = 800;
-
-const sleep = (ms: number) => new Promise<void>((res) => setTimeout(res, ms));
 
 // Base URL for internal fetch calls (Vercel sets VERCEL_URL automatically).
 const BASE_URL = process.env.VERCEL_URL
@@ -42,43 +87,22 @@ export async function POST(req: Request) {
       { status: 400 },
     );
   }
-
   const jobId = newJobId();
   createJob(jobId);
+  // Stash the input photo server-side so the frontend can fetch it via
+  // /api/jobs/<id>/photo without dealing with sessionStorage quotas.
+  setPhoto(jobId, parsed.data.photo_url);
 
-  if (parsed.data.demo_id) {
-    const script = demoScripts[parsed.data.demo_id];
-    void runCached(jobId, script, parsed.data.demo_id);
-    return NextResponse.json(RunResponse.parse({ job_id: jobId, cached: true }));
-  }
-
-  void runLive(jobId, parsed.data);
+  void runLive(jobId, {
+    photo_url: parsed.data.photo_url,
+    transcript_fr: parsed.data.transcript_fr,
+  });
   return NextResponse.json(RunResponse.parse({ job_id: jobId, cached: false }));
-}
-
-// ---------- Cached path ----------
-
-async function runCached(
-  jobId: string,
-  script: (typeof demoScripts)[keyof typeof demoScripts],
-  demoId: keyof typeof demos,
-) {
-  try {
-    emit(jobId, { type: 'log', message: `> Démo : ${demos[demoId].title_fr}` });
-    await script((ev: StreamEvent) => emit(jobId, ev), sleep);
-  } catch (err) {
-    emit(jobId, {
-      type: 'error',
-      message: err instanceof Error ? err.message : 'Demo script crashed',
-    });
-  } finally {
-    closeJob(jobId);
-  }
 }
 
 // ---------- Live path ----------
 
-async function runLive(jobId: string, input: { photo_url?: string; transcript_fr?: string }) {
+async function runLive(jobId: string, input: { photo_url: string; transcript_fr?: string }) {
   // Helper: POST to an internal route and return parsed JSON.
   // Throws a descriptive error on non-2xx so the catch block surfaces it.
   async function post<T>(path: string, body: unknown): Promise<T> {
@@ -98,8 +122,6 @@ async function runLive(jobId: string, input: { photo_url?: string; transcript_fr
   let quality: 'high' | 'medium' = 'high';
 
   try {
-    if (!input.photo_url) throw new Error('photo_url manquant pour le mode live');
-
     emit(jobId, { type: 'log', message: '> Fixit — pipeline live démarré…' });
     emit(jobId, {
       type: 'info',
@@ -109,7 +131,7 @@ async function runLive(jobId: string, input: { photo_url?: string; transcript_fr
     // ── 1. Analyze ─────────────────────────────────────────────────────────
     emit(jobId, {
       type: 'log',
-      message: '⠋ Analyse de l\'image (GPT-5.5 vision, detail:auto)…',
+      message: "⠋ Analyse de l'image (GPT-5.5 vision, detail:auto)…",
       transient: true,
     });
 
@@ -121,14 +143,29 @@ async function runLive(jobId: string, input: { photo_url?: string; transcript_fr
     emit(jobId, { type: 'analyze_done', result: analyzeResult });
     emit(jobId, { type: 'log', message: `✓ Objet identifié : ${analyzeResult.object}` });
 
-    // ── 2. Clarify (non-bloquant : on signale mais on continue) ────────────
+    // ── 2. Clarify (interactive — pause until the user answers or timeout) ─
+    let userAnswers: ClarifyAnswer[] | null = null;
     if (analyzeResult.uncertainties.length > 0) {
       emit(jobId, { type: 'clarify_needed', uncertainties: analyzeResult.uncertainties });
       emit(jobId, {
         type: 'log',
-        message: `⚠ ${analyzeResult.uncertainties.length} incertitude(s) — procédure la plus probable retenue`,
-        severity: 'warn',
+        message: `⠋ ${analyzeResult.uncertainties.length} question(s) — en attente de tes réponses…`,
+        transient: true,
       });
+      userAnswers = await waitForClarify(jobId, CLARIFY_WAIT_MS);
+      if (userAnswers) {
+        emit(jobId, { type: 'clarify_done' });
+        emit(jobId, {
+          type: 'log',
+          message: `✓ Réponses reçues (${userAnswers.length}) — affinage de la procédure`,
+        });
+      } else {
+        emit(jobId, {
+          type: 'log',
+          message: '⚠ Pas de réponse dans le temps imparti — procédure la plus probable retenue',
+          severity: 'warn',
+        });
+      }
     }
 
     // ── 3. Plan ────────────────────────────────────────────────────────────
@@ -140,6 +177,7 @@ async function runLive(jobId: string, input: { photo_url?: string; transcript_fr
 
     const repairPlan = await post<RepairPlan>('/api/plan', {
       analyze: analyzeResult,
+      answers: userAnswers ?? undefined,
     });
 
     emit(jobId, { type: 'plan_done', result: repairPlan });
@@ -147,6 +185,23 @@ async function runLive(jobId: string, input: { photo_url?: string; transcript_fr
       type: 'log',
       message: `✓ Plan : ${repairPlan.steps.length} étapes · ${repairPlan.total_duration_min} min · ${repairPlan.difficulty}`,
     });
+
+    // Debug dump: print the full plan to the dev server terminal BEFORE we
+    // hand off to fal/Seedance/Gradium. Useful to inspect what each generator
+    // will actually receive (visual prompts, motion prompts, narration).
+    logRepairPlan(jobId, repairPlan);
+
+    // ⚠️ Video generation suspended for script-review iteration.
+    // Re-enable by removing this block once the plan output is validated.
+    if (SKIP_VIDEO_GENERATION) {
+      emit(jobId, {
+        type: 'info',
+        message:
+          'Plan ready. Video generation suspended (script-review mode). Check the dev terminal for the full plan.',
+      });
+      emit(jobId, { type: 'done' });
+      return;
+    }
 
     // ── 4. Per-step : keyframe → animate + narrate ─────────────────────────
     // Step 1 runs first alone so we can measure latency and downgrade quality if needed.

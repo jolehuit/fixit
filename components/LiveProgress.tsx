@@ -1,7 +1,13 @@
 'use client';
 
-import { useEffect, useReducer, useRef } from 'react';
-import type { AnalyzeResult, RepairPlan, StreamEvent, Uncertainty } from '@/lib/types';
+import { useEffect, useReducer, useRef, useState } from 'react';
+import type {
+  AnalyzeResult,
+  ClarifyAnswer,
+  RepairPlan,
+  StreamEvent,
+  Uncertainty,
+} from '@/lib/types';
 
 type StepProgress = {
   keyframeStart?: string;
@@ -14,9 +20,10 @@ type LogLine = { id: number; message: string; severity?: 'info' | 'warn' | 'erro
 
 type LiveState = {
   startedAt: number;
-  logs: LogLine[];
+  lastLog: LogLine | null;
   analyze: AnalyzeResult | null;
   clarifyUncertainties: Uncertainty[] | null;
+  clarifyResolved: boolean;
   plan: RepairPlan | null;
   stepsProgress: Record<number, StepProgress>;
   finalUrl: string | null;
@@ -28,9 +35,10 @@ type Action = { type: 'event'; ev: StreamEvent } | { type: 'connection_closed' }
 
 const initialState = (): LiveState => ({
   startedAt: Date.now(),
-  logs: [],
+  lastLog: null,
   analyze: null,
   clarifyUncertainties: null,
+  clarifyResolved: false,
   plan: null,
   stepsProgress: {},
   finalUrl: null,
@@ -46,23 +54,19 @@ function reducer(state: LiveState, action: Action): LiveState {
   }
   const ev = action.ev;
   switch (ev.type) {
-    case 'log': {
-      // Drop transient logs once a milestone has landed for the same phase —
-      // keep it simple: only push non-transient OR keep last 4 transient lines.
-      const next = [...state.logs, { id: ++logId, message: ev.message, severity: ev.severity }];
-      // Cap log history at 20 lines to keep the UI tight.
-      return { ...state, logs: next.slice(-20) };
-    }
-    case 'info': {
-      const line: LogLine = { id: ++logId, message: ev.message, severity: 'info' };
-      return { ...state, logs: [...state.logs, line].slice(-20) };
-    }
+    case 'log':
+      return { ...state, lastLog: { id: ++logId, message: ev.message, severity: ev.severity } };
+    case 'info':
+      return {
+        ...state,
+        lastLog: { id: ++logId, message: ev.message, severity: 'info' },
+      };
     case 'analyze_done':
       return { ...state, analyze: ev.result };
     case 'clarify_needed':
       return { ...state, clarifyUncertainties: ev.uncertainties };
     case 'clarify_done':
-      return state;
+      return { ...state, clarifyResolved: true };
     case 'plan_done':
       return { ...state, plan: ev.result };
     case 'keyframe_done': {
@@ -103,17 +107,50 @@ function reducer(state: LiveState, action: Action): LiveState {
   }
 }
 
+// ---- Helpers to extract a 1-line summary from the slotted analyze strings ----
+
+function pickSlot(slottedString: string, slotName: string): string | null {
+  // Slotted format: "Brand: X ; Model line: Y ; ..."
+  const re = new RegExp(`(?:^|\\s;\\s)${slotName}\\s*:\\s*([^;]+)`);
+  const m = slottedString.match(re);
+  return m ? m[1].trim() : null;
+}
+
+function shortObjectSummary(slotted: string): string {
+  const brand = pickSlot(slotted, 'Brand');
+  const modelLine = pickSlot(slotted, 'Model line');
+  const variant = pickSlot(slotted, 'Model code or variant');
+  const parts = [brand, modelLine, variant].filter(Boolean) as string[];
+  if (parts.length === 0) {
+    // Fall back to the first slot (or the whole string truncated)
+    return slotted.split(/\s*;\s*/)[0]?.trim() ?? slotted.slice(0, 80);
+  }
+  return parts.join(' · ');
+}
+
+function shortProblemSummary(slotted: string): string {
+  const defect = pickSlot(slotted, 'Defect');
+  const where = pickSlot(slotted, 'located at');
+  if (defect && where) return `${defect} — at ${where}`;
+  return defect ?? slotted.split(/\s*;\s*/)[0]?.trim() ?? slotted.slice(0, 100);
+}
+
 export function LiveProgress({
   jobId,
+  onAnalyze,
   onVideoReady,
   onOpenVideo,
 }: {
   jobId: string;
+  /** Receives the AnalyzeResult as soon as it arrives (used by the parent to draw the marker). */
+  onAnalyze?: (a: AnalyzeResult) => void;
   onVideoReady?: (url: string) => void;
   onOpenVideo?: () => void;
 }) {
   const [state, dispatch] = useReducer(reducer, undefined, initialState);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const onAnalyzeRef = useRef(onAnalyze);
+  onAnalyzeRef.current = onAnalyze;
   const onVideoReadyRef = useRef(onVideoReady);
   onVideoReadyRef.current = onVideoReady;
 
@@ -128,6 +165,7 @@ export function LiveProgress({
         return;
       }
       dispatch({ type: 'event', ev });
+      if (ev.type === 'analyze_done') onAnalyzeRef.current?.(ev.result);
       if (ev.type === 'stitch_done') onVideoReadyRef.current?.(ev.video_url);
       if (ev.type === 'done' || ev.type === 'error') es.close();
     };
@@ -138,7 +176,7 @@ export function LiveProgress({
     return () => es.close();
   }, [jobId]);
 
-  // ---- Auto-scroll ----
+  // ---- Auto-scroll on new content ----
   // biome-ignore lint/correctness/useExhaustiveDependencies: scroll follows state changes
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
@@ -148,7 +186,7 @@ export function LiveProgress({
     state.plan,
     state.stepsProgress,
     state.finalUrl,
-    state.logs.length,
+    state.lastLog?.id,
   ]);
 
   const elapsedSec = Math.floor((Date.now() - state.startedAt) / 1000);
@@ -162,7 +200,7 @@ export function LiveProgress({
           </span>
           <div className="flex flex-col leading-tight">
             <span className="text-sm font-semibold text-[color:var(--color-fg)]">
-              Live pipeline
+              Live diagnosis
             </span>
             <span className="text-xs text-[color:var(--color-muted)]">
               {state.done
@@ -181,97 +219,26 @@ export function LiveProgress({
         ) : null}
       </header>
 
-      <div className="flex min-h-[420px] flex-1 flex-col gap-4 overflow-y-auto px-5 pb-5 sm:min-h-[520px]">
-        {/* Logs (rolling, top) */}
-        {state.logs.length > 0 ? (
-          <section className="rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 py-2">
-            <ul className="flex flex-col gap-1 font-mono text-xs leading-relaxed">
-              {state.logs.map((l) => (
-                <li
-                  key={l.id}
-                  className={
-                    l.severity === 'error'
-                      ? 'text-[color:var(--color-danger)]'
-                      : l.severity === 'warn'
-                        ? 'text-[color:var(--color-warn)]'
-                        : 'text-[color:var(--color-muted)]'
-                  }
-                >
-                  {l.message}
-                </li>
-              ))}
-            </ul>
-          </section>
-        ) : null}
+      <div className="flex min-h-[420px] flex-1 flex-col gap-3 overflow-y-auto px-5 pb-5 sm:min-h-[520px]">
+        {/* Current activity line — only the LATEST log, not a scroll wall */}
+        {!state.done && state.lastLog ? <StatusLine line={state.lastLog} /> : null}
 
-        {/* Analyze */}
-        {state.analyze ? (
-          <Card title="1. Identification">
-            <SlottedString label="Object" value={state.analyze.object} />
-            <SlottedString label="Problem" value={state.analyze.problem_visual} />
-            <p className="text-xs text-[color:var(--color-subtle)]">
-              Category: {state.analyze.category}
-            </p>
-          </Card>
-        ) : null}
+        {/* 1. Identification — compact card, slot details collapsed */}
+        {state.analyze ? <IdentificationCard analyze={state.analyze} /> : null}
 
-        {/* Clarify (informative) */}
+        {/* 2. Clarifications — interactive when active, summary when resolved */}
         {state.clarifyUncertainties && state.clarifyUncertainties.length > 0 ? (
-          <Card title={`2. Clarifications (${state.clarifyUncertainties.length})`}>
-            <p className="text-xs text-[color:var(--color-muted)]">
-              The model flagged these uncertainties. The pipeline continues with the most probable
-              procedure.
-            </p>
-            <ul className="flex flex-col gap-2">
-              {state.clarifyUncertainties.map((u) => (
-                <li
-                  key={u.field}
-                  className="rounded-md bg-[color:var(--color-surface)] px-3 py-2 text-sm"
-                >
-                  <p className="font-medium text-[color:var(--color-fg)]">{u.question_fr}</p>
-                  {u.options && u.options.length > 0 ? (
-                    <p className="mt-1 text-xs text-[color:var(--color-muted)]">
-                      Options: {u.options.join(' · ')}
-                    </p>
-                  ) : (
-                    <p className="mt-1 text-xs text-[color:var(--color-muted)]">Free-text answer</p>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </Card>
+          <ClarifyCard
+            jobId={jobId}
+            uncertainties={state.clarifyUncertainties}
+            resolved={state.clarifyResolved}
+          />
         ) : null}
 
-        {/* Plan */}
-        {state.plan ? (
-          <Card
-            title={`3. Repair plan · ${state.plan.steps.length} steps · ${state.plan.difficulty} · ~${state.plan.total_duration_min} min`}
-          >
-            <p className="text-sm font-medium text-[color:var(--color-fg)]">
-              {state.plan.problem_summary_fr}
-            </p>
-            <ol className="flex flex-col gap-1.5 pl-4 text-sm">
-              {state.plan.steps.map((s) => {
-                const p = state.stepsProgress[s.step_number] ?? {};
-                return (
-                  <li
-                    key={s.step_number}
-                    className="list-decimal text-[color:var(--color-fg)] marker:text-[color:var(--color-muted)]"
-                  >
-                    <span className="font-medium">{s.title_fr}</span>
-                    <span className="ml-2 text-xs text-[color:var(--color-muted)]">
-                      <CheckChip ok={Boolean(p.keyframeStart && p.keyframeEnd)} label="keyframes" />
-                      <CheckChip ok={Boolean(p.animationUrl)} label="anim" />
-                      <CheckChip ok={Boolean(p.narrationUrl)} label="narration" />
-                    </span>
-                  </li>
-                );
-              })}
-            </ol>
-          </Card>
-        ) : null}
+        {/* 3. Repair plan + step progress */}
+        {state.plan ? <PlanCard plan={state.plan} progress={state.stepsProgress} /> : null}
 
-        {/* Final video */}
+        {/* Final CTA — opens the video */}
         {state.finalUrl ? (
           <button
             type="button"
@@ -296,49 +263,299 @@ export function LiveProgress({
   );
 }
 
-// ---- Sub-components ----
+// ---- Cards ----
 
-function Card({ title, children }: { title: string; children: React.ReactNode }) {
+function StatusLine({ line }: { line: LogLine }) {
+  const color =
+    line.severity === 'error'
+      ? 'text-[color:var(--color-danger)]'
+      : line.severity === 'warn'
+        ? 'text-[color:var(--color-warn)]'
+        : 'text-[color:var(--color-muted)]';
   return (
-    <section className="flex animate-[fade-in_220ms_ease-out] flex-col gap-2 rounded-lg border border-[color:var(--color-border)] bg-white p-4">
-      <h3 className="text-sm font-semibold text-[color:var(--color-fg)]">{title}</h3>
-      {children}
-    </section>
-  );
-}
-
-function SlottedString({ label, value }: { label: string; value: string }) {
-  // analyze.object and analyze.problem_visual are " ; "-separated slotted strings.
-  // Render each slot on its own line for readability.
-  const slots = value.split(/\s*;\s*/).filter(Boolean);
-  return (
-    <div className="flex flex-col gap-0.5">
-      <span className="text-xs font-medium uppercase tracking-wide text-[color:var(--color-subtle)]">
-        {label}
+    <div className="flex items-center gap-2 font-mono text-xs">
+      <span className="inline-flex items-end gap-1">
+        <span className="h-1.5 w-1.5 animate-[dot_1.2s_ease-in-out_infinite] rounded-full bg-[color:var(--color-accent)]" />
+        <span className="h-1.5 w-1.5 animate-[dot_1.2s_ease-in-out_-0.2s_infinite] rounded-full bg-[color:var(--color-accent)]" />
+        <span className="h-1.5 w-1.5 animate-[dot_1.2s_ease-in-out_-0.4s_infinite] rounded-full bg-[color:var(--color-accent)]" />
       </span>
-      {slots.length <= 1 ? (
-        <p className="text-sm text-[color:var(--color-fg)]">{value}</p>
-      ) : (
-        <ul className="flex flex-col gap-0.5 text-sm text-[color:var(--color-fg)]">
-          {slots.map((s) => (
-            <li key={s}>{s}</li>
-          ))}
-        </ul>
-      )}
+      <span className={color}>{line.message}</span>
     </div>
   );
 }
 
-function CheckChip({ ok, label }: { ok: boolean; label: string }) {
+function IdentificationCard({ analyze }: { analyze: AnalyzeResult }) {
+  const [open, setOpen] = useState(false);
+  const objSummary = shortObjectSummary(analyze.object);
+  const probSummary = shortProblemSummary(analyze.problem_visual);
+  const objSlots = analyze.object.split(/\s*;\s*/).filter(Boolean);
+  const probSlots = analyze.problem_visual.split(/\s*;\s*/).filter(Boolean);
+
+  return (
+    <section className="flex animate-[fade-in_220ms_ease-out] flex-col gap-2 rounded-lg border border-[color:var(--color-border)] bg-white p-4">
+      <div className="flex items-baseline justify-between gap-3">
+        <h3 className="text-sm font-semibold text-[color:var(--color-fg)]">Identification</h3>
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className="text-xs font-medium text-[color:var(--color-accent)] transition hover:underline"
+        >
+          {open ? 'Hide details' : 'Show details'}
+        </button>
+      </div>
+      <p className="text-sm text-[color:var(--color-fg)]">
+        <span className="font-medium">Object — </span>
+        {objSummary}
+      </p>
+      <p className="text-sm text-[color:var(--color-fg)]">
+        <span className="font-medium">Problem — </span>
+        {probSummary}
+      </p>
+      {open ? (
+        <div className="mt-2 flex flex-col gap-3 border-t border-[color:var(--color-border)] pt-3">
+          <SlotList label="Object slots" slots={objSlots} />
+          <SlotList label="Problem slots" slots={probSlots} />
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function SlotList({ label, slots }: { label: string; slots: string[] }) {
+  return (
+    <div className="flex flex-col gap-0.5">
+      <span className="text-[10px] font-medium uppercase tracking-wide text-[color:var(--color-subtle)]">
+        {label}
+      </span>
+      <ul className="flex flex-col gap-0.5 text-xs text-[color:var(--color-muted)]">
+        {slots.map((s) => (
+          <li key={s}>{s}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function InfoTooltip({ text }: { text: string }) {
+  return (
+    <span className="group/tooltip relative inline-flex">
+      <button
+        type="button"
+        aria-label={text}
+        title={text}
+        className="inline-flex h-4 w-4 cursor-help items-center justify-center rounded-full border border-[color:var(--color-border-strong)] bg-white text-[10px] font-semibold leading-none text-[color:var(--color-muted)] transition group-hover/tooltip:border-[color:var(--color-accent)] group-hover/tooltip:text-[color:var(--color-accent)]"
+      >
+        i
+      </button>
+      <span
+        role="tooltip"
+        className="pointer-events-none absolute left-1/2 top-full z-10 mt-1.5 w-max max-w-xs -translate-x-1/2 rounded-md bg-[color:var(--color-fg)] px-2.5 py-1.5 text-xs font-medium text-white opacity-0 shadow-lg transition group-hover/tooltip:opacity-100"
+      >
+        {text}
+      </span>
+    </span>
+  );
+}
+
+function ClarifyCard({
+  jobId,
+  uncertainties,
+  resolved,
+}: {
+  jobId: string;
+  uncertainties: Uncertainty[];
+  resolved: boolean;
+}) {
+  // answers[field] = value (button choice or free-text)
+  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const submitted = resolved;
+
+  const setAnswer = (field: string, value: string) => {
+    setAnswers((a) => ({ ...a, [field]: value }));
+  };
+
+  const allAnswered = uncertainties.every((u) => Boolean(answers[u.field]?.trim()));
+
+  const submit = async () => {
+    setSubmitting(true);
+    setSubmitError(null);
+    try {
+      const payload: ClarifyAnswer[] = uncertainties
+        .map((u) => ({ field: u.field, value: answers[u.field] ?? '' }))
+        .filter((a) => a.value.trim().length > 0);
+      const res = await fetch('/api/clarify-resolve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ job_id: jobId, answers: payload }),
+      });
+      if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        throw new Error(`HTTP ${res.status}: ${text.slice(0, 200)}`);
+      }
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : 'Could not submit answers.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <section className="flex animate-[fade-in_220ms_ease-out] flex-col gap-3 rounded-lg border border-[color:var(--color-accent)]/30 bg-[color:var(--color-bubble-user)]/30 p-4">
+      <div className="flex items-baseline justify-between gap-3">
+        <h3 className="text-sm font-semibold text-[color:var(--color-fg)]">
+          {submitted ? 'Your clarifications' : `A few quick questions (${uncertainties.length})`}
+        </h3>
+        {!submitted ? (
+          <span className="text-xs text-[color:var(--color-muted)]">Answer to refine the plan</span>
+        ) : null}
+      </div>
+
+      <ul className="flex flex-col gap-3">
+        {uncertainties.map((u) => {
+          const { question, purpose } = splitQuestion(u.question_fr);
+          const current = answers[u.field] ?? '';
+          return (
+            <li key={u.field} className="flex flex-col gap-2">
+              <div className="flex items-start gap-1.5">
+                <p className="text-sm font-medium text-[color:var(--color-fg)]">{question}</p>
+                {purpose ? <InfoTooltip text={purpose} /> : null}
+              </div>
+
+              {u.options && u.options.length > 0 ? (
+                <div className="flex flex-col gap-2">
+                  <div className="flex flex-wrap gap-2">
+                    {u.options.map((opt) => {
+                      const active = current === opt;
+                      return (
+                        <button
+                          key={opt}
+                          type="button"
+                          disabled={submitted || submitting}
+                          onClick={() => setAnswer(u.field, opt)}
+                          className={`rounded-full border px-3 py-1.5 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-70 ${
+                            active
+                              ? 'border-[color:var(--color-accent)] bg-[color:var(--color-accent)] text-white shadow-sm ring-2 ring-[color:var(--color-accent)]/30'
+                              : 'border-[color:var(--color-border)] bg-white text-[color:var(--color-fg)] hover:border-[color:var(--color-accent)]'
+                          }`}
+                        >
+                          {opt}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <input
+                    type="text"
+                    value={u.options.includes(current) ? '' : current}
+                    disabled={submitted || submitting}
+                    onChange={(e) => setAnswer(u.field, e.target.value)}
+                    placeholder="…or type something else"
+                    className="rounded-md border border-[color:var(--color-border)] bg-white px-3 py-1.5 text-sm text-[color:var(--color-fg)] outline-none transition focus:border-[color:var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-70"
+                  />
+                </div>
+              ) : (
+                <input
+                  type="text"
+                  value={current}
+                  disabled={submitted || submitting}
+                  onChange={(e) => setAnswer(u.field, e.target.value)}
+                  placeholder="Type your answer…"
+                  className="rounded-md border border-[color:var(--color-border)] bg-white px-3 py-1.5 text-sm text-[color:var(--color-fg)] outline-none transition focus:border-[color:var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-70"
+                />
+              )}
+            </li>
+          );
+        })}
+      </ul>
+
+      {!submitted ? (
+        <div className="flex items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={submit}
+            disabled={!allAnswered || submitting}
+            className="rounded-md bg-[color:var(--color-accent)] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[color:var(--color-accent-hover)] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {submitting ? 'Submitting…' : 'Continue'}
+          </button>
+          {submitError ? (
+            <span className="text-xs text-[color:var(--color-danger)]">{submitError}</span>
+          ) : null}
+        </div>
+      ) : (
+        <p className="text-xs text-[color:var(--color-accent)]">
+          ✓ Sent — the plan is being tailored to your answers.
+        </p>
+      )}
+    </section>
+  );
+}
+
+function PlanCard({
+  plan,
+  progress,
+}: {
+  plan: RepairPlan;
+  progress: Record<number, StepProgress>;
+}) {
+  return (
+    <section className="flex animate-[fade-in_220ms_ease-out] flex-col gap-3 rounded-lg border border-[color:var(--color-border)] bg-white p-4">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h3 className="text-sm font-semibold text-[color:var(--color-fg)]">Repair plan</h3>
+        <span className="text-xs text-[color:var(--color-muted)]">
+          {plan.steps.length} steps · {plan.difficulty} · ~{plan.total_duration_min} min
+        </span>
+      </div>
+      <p className="text-sm text-[color:var(--color-fg)]">{plan.problem_summary_fr}</p>
+      <ol className="flex flex-col gap-2 text-sm">
+        {plan.steps.map((s) => {
+          const p = progress[s.step_number] ?? {};
+          const keyframesOk = Boolean(p.keyframeStart && p.keyframeEnd);
+          const animOk = Boolean(p.animationUrl);
+          const narrOk = Boolean(p.narrationUrl);
+          const allOk = keyframesOk && animOk && narrOk;
+          return (
+            <li
+              key={s.step_number}
+              className="flex items-center justify-between gap-3 rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 py-2"
+            >
+              <span className="flex items-center gap-2">
+                <span
+                  className={`inline-flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-semibold ${
+                    allOk
+                      ? 'bg-[color:var(--color-accent)] text-white'
+                      : 'bg-white text-[color:var(--color-muted)] ring-1 ring-[color:var(--color-border-strong)]'
+                  }`}
+                >
+                  {s.step_number}
+                </span>
+                <span className="text-[color:var(--color-fg)]">{s.title_fr}</span>
+              </span>
+              <span className="flex items-center gap-1">
+                <ProgressDot ok={keyframesOk} label="frames" />
+                <ProgressDot ok={animOk} label="anim" />
+                <ProgressDot ok={narrOk} label="voice" />
+              </span>
+            </li>
+          );
+        })}
+      </ol>
+    </section>
+  );
+}
+
+function ProgressDot({ ok, label }: { ok: boolean; label: string }) {
   return (
     <span
-      className={`ml-1 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
+      className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
         ok
           ? 'bg-[color:var(--color-accent)]/10 text-[color:var(--color-accent)]'
           : 'bg-[color:var(--color-surface)] text-[color:var(--color-subtle)]'
       }`}
     >
-      {ok ? '✓' : '·'} {label}
+      <span aria-hidden>{ok ? '✓' : '·'}</span>
+      {label}
     </span>
   );
 }
@@ -357,4 +574,13 @@ function PlayIcon() {
       <path d="M4 3l9 5-9 5V3z" />
     </svg>
   );
+}
+
+// "Question here? (— used to do X)" → { question: "Question here?", purpose: "Used to do X" }
+function splitQuestion(raw: string): { question: string; purpose: string | null } {
+  const match = raw.match(/^(.*?)\s*\(\s*[—-]\s*(.+?)\s*\)\s*$/);
+  if (!match) return { question: raw.trim(), purpose: null };
+  const purposeRaw = match[2].trim();
+  const purpose = purposeRaw.charAt(0).toUpperCase() + purposeRaw.slice(1);
+  return { question: match[1].trim(), purpose };
 }

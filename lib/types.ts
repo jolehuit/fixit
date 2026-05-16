@@ -36,11 +36,21 @@ export const Uncertainty = z.object({
 });
 export type Uncertainty = z.infer<typeof Uncertainty>;
 
+/** Pixel-space coords (% of image box) of where the defect is centered. */
+export const DefectMarker = z.object({
+  x: z.number().min(0).max(100),
+  y: z.number().min(0).max(100),
+  label: z.string(),
+});
+export type DefectMarker = z.infer<typeof DefectMarker>;
+
 export const AnalyzeResult = z.object({
   object: z.string(),
   category: RepairCategory,
   problem_visual: z.string(),
   uncertainties: z.array(Uncertainty),
+  /** Where to draw the pulsing marker on the photo. Optional for back-compat. */
+  defect_marker: DefectMarker.optional(),
 });
 export type AnalyzeResult = z.infer<typeof AnalyzeResult>;
 
@@ -152,13 +162,7 @@ export const AnimateStepRequest = z.object({
   end_frame_url: z.string().url(),
   motion_prompt: z.string(),
   duration_seconds: z
-    .union([
-      z.literal(4),
-      z.literal(5),
-      z.literal(6),
-      z.literal(7),
-      z.literal(8),
-    ])
+    .union([z.literal(4), z.literal(5), z.literal(6), z.literal(7), z.literal(8)])
     .default(5),
   resolution: z.enum(['480p', '720p']).default('720p'),
 });
@@ -186,16 +190,11 @@ export const StitchRequest = z.object({
 });
 export type StitchRequest = z.infer<typeof StitchRequest>;
 
-/** Either run a cached demo (demo_id) or run live (photo_url + transcript). */
-export const RunRequest = z
-  .object({
-    demo_id: DemoId.optional(),
-    photo_url: z.string().url().optional(),
-    transcript_fr: z.string().optional(),
-  })
-  .refine((v) => Boolean(v.demo_id) || Boolean(v.photo_url), {
-    message: 'Provide either demo_id (cached) or photo_url (live).',
-  });
+/** Live pipeline only — the cached-script path was removed. */
+export const RunRequest = z.object({
+  photo_url: z.string().url(),
+  transcript_fr: z.string().optional(),
+});
 export type RunRequest = z.infer<typeof RunRequest>;
 
 export const RunResponse = z.object({

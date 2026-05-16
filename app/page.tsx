@@ -32,15 +32,19 @@ export default function HomePage() {
             Get a personalized repair video in 90 seconds.
           </h1>
           <p className="max-w-xl text-lg text-[color:var(--color-muted)]">
-            Show us what's broken. Our AI watches your photo, asks a couple of clarifying questions,
+            Drop a photo of what's broken. Our AI watches it, asks a couple of clarifying questions,
             then walks you through the fix step by step.
           </p>
         </section>
 
-        <section className="mt-16 sm:mt-20">
+        <section className="mt-10 sm:mt-12">
+          <PhotoUpload />
+        </section>
+
+        <section className="mt-20 sm:mt-24">
           <div className="mb-6 flex items-end justify-between gap-4">
             <h2 className="text-xl font-semibold text-[color:var(--color-fg)]">
-              Try a sample repair
+              Or try a sample repair
             </h2>
             <span className="text-sm text-[color:var(--color-muted)]">3 guided demos</span>
           </div>
@@ -49,16 +53,6 @@ export default function HomePage() {
               <DemoCard key={demo.id} demo={demo} />
             ))}
           </div>
-        </section>
-
-        <section className="mt-16 sm:mt-20">
-          <div className="mb-6 flex items-end justify-between gap-4">
-            <h2 className="text-xl font-semibold text-[color:var(--color-fg)]">
-              Try with your own photo
-            </h2>
-            <span className="text-sm text-[color:var(--color-muted)]">Real-time live pipeline</span>
-          </div>
-          <PhotoUpload />
         </section>
       </main>
 

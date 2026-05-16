@@ -82,9 +82,12 @@ For EACH step:
 - "parts_needed": list, each ≤3 words. Where the research context names a specific part (P/N, brand, dimension), use that. Empty array if no parts.
 - "tools_needed": list, each ≤3 words. Empty array if no tools.
 - "duration_seconds": integer 30–600, realistic.
-- "visual_prompt_start": ≤25 English words. Describe the BEFORE state. Mention the specific object (use brand/model from input), the hand position, tools in frame, the relevant sub-component.
-- "visual_prompt_end": ≤25 English words. Describe the AFTER state in the same scene language.
-- "motion_prompt": ≤1 English sentence. The action that transforms start → end.
+- "visual_prompt_start" AND "visual_prompt_end" describe the SAME exact scene from the SAME camera angle, framing, distance, lens, and lighting. **The only thing that differs between start and end is the action's state** (hand position, tool position, sub-component before vs after).
+    * Both ≤25 English words.
+    * Mention the specific object (use brand/model from input), hand position, tools in frame, the sub-component acted upon.
+    * Use identical framing language across the pair (e.g., both say "top-down view, close-up on the trap inlet" — not "top-down" for start and "side view" for end).
+    * Never introduce/remove objects between start and end. Tools and hands present in start MUST also be in end (or simply have moved).
+- "motion_prompt": ≤1 English sentence describing what physically changes (the action), in the present tense ("you turn", "you slide"). The downstream video model will be additionally told to keep the camera and scene fixed — your motion prompt only needs to describe the action itself, NOT the framing.
 - "narration_fr": 50–80 words, English (legacy field name), second-person ("you"). Describe what the user does, with the precision the research context allows (e.g. mention specific torque, screw type, washer orientation). Pace must match duration_seconds.
 
 Top-level:
@@ -244,8 +247,8 @@ export async function POST(req: Request) {
     const result = await generateObject({
       model: reasoningModel(),
       schema: RepairPlan,
+      system: SYSTEM_PROMPT,
       messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
         {
           role: 'user',
           content: buildLlmUserPrompt(

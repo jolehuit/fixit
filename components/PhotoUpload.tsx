@@ -67,11 +67,8 @@ export function PhotoUpload() {
           throw new Error(`POST /api/run failed (${res.status}): ${text.slice(0, 200)}`);
         }
         const data = (await res.json()) as RunResponse;
-        try {
-          sessionStorage.setItem(`photo:${data.job_id}`, dataUrl);
-        } catch {
-          // Quota or private browsing — proceed without preview.
-        }
+        // Photo is stored server-side by /api/run — the job page fetches it
+        // via /api/jobs/<id>/photo. No client-side storage required.
         router.push(`/job/${data.job_id}?mode=live`);
       } catch (err) {
         setPhase('error');

@@ -85,8 +85,8 @@ export async function POST(req: Request) {
     const result = await generateObject({
       model: reasoningModel(),
       schema: ClarifyOptions,
+      system: SYSTEM_PROMPT,
       messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
         {
           role: 'user',
           content: userPrompt(

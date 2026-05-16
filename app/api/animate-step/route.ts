@@ -12,13 +12,14 @@
  */
 
 import { NextResponse } from 'next/server';
-import { fal, FAL_VIDEO_I2V_ENDPOINT } from '@/lib/fal';
+import { FAL_VIDEO_I2V_ENDPOINT, fal } from '@/lib/fal';
 import { AnimatedClip, AnimateStepRequest } from '@/lib/types';
 
 export const runtime = 'nodejs';
 
 type SeedanceInput = {
   prompt: string;
+  negative_prompt?: string;
   image_url: string;
   end_image_url?: string;
   resolution: '480p' | '720p';
@@ -26,6 +27,49 @@ type SeedanceInput = {
   aspect_ratio: 'auto' | '21:9' | '16:9' | '4:3' | '1:1' | '3:4' | '9:16';
   generate_audio: boolean;
 };
+
+/**
+ * Stability wrapper applied to every motion_prompt. The two keyframes already
+ * lock the start and end states; this wrapper constrains Seedance to stay in
+ * the same scene/camera/POV between them instead of inventing new content.
+ *
+ * Empirically observed Seedance failure modes we want to suppress:
+ *   - camera pans / zooms unrelated to the action
+ *   - extra hands materializing
+ *   - tools / objects appearing or disappearing mid-clip
+ *   - the subject morphing into a different object
+ *   - background changing (workshop → kitchen, etc.)
+ */
+const SEEDANCE_SCENE_WRAPPER = (motion: string): string =>
+  [
+    'Camera fixed in place. Same scene, same framing, same lighting from start to end.',
+    'No camera pan, no camera zoom, no cuts, no scene change.',
+    'The only thing that moves is the action described next.',
+    `Action: ${motion}`,
+    'The object being repaired, the hands, and the tools remain consistent with the first frame — never multiply, morph, or disappear.',
+  ].join(' ');
+
+const SEEDANCE_NEGATIVE_PROMPT = [
+  'camera pan',
+  'camera zoom',
+  'camera shake',
+  'scene change',
+  'cut',
+  'transition',
+  'extra hands',
+  'extra fingers',
+  'duplicated tools',
+  'morphing object',
+  'disappearing tool',
+  'new object appearing',
+  'background change',
+  'text overlay',
+  'subtitles',
+  'watermark',
+  'blurry',
+  'low quality',
+  'distorted',
+].join(', ');
 
 type SeedanceOutput = {
   video?: { url?: string };
@@ -59,7 +103,8 @@ export async function POST(req: Request) {
   } = parsed.data;
 
   const input: SeedanceInput = {
-    prompt: motion_prompt,
+    prompt: SEEDANCE_SCENE_WRAPPER(motion_prompt),
+    negative_prompt: SEEDANCE_NEGATIVE_PROMPT,
     image_url: start_frame_url,
     end_image_url: end_frame_url,
     resolution,
@@ -67,7 +112,9 @@ export async function POST(req: Request) {
     duration: String(duration_seconds),
     // Fixit pipeline always produces landscape clips per PRD §5.1.
     aspect_ratio: '16:9',
-    generate_audio: true,
+    // Audio is provided by Gradium TTS (per-step narration) and muxed via
+    // ffmpeg in /api/stitch. Seedance audio would double-up with the narration.
+    generate_audio: false,
   };
 
   let lastErr: unknown = null;
@@ -78,9 +125,7 @@ export async function POST(req: Request) {
       const video_url = data?.video?.url;
 
       if (!video_url) {
-        throw new Error(
-          `Seedance returned no video URL (data=${JSON.stringify(data)})`,
-        );
+        throw new Error(`Seedance returned no video URL (data=${JSON.stringify(data)})`);
       }
 
       // The request value is what we contracted for. Seedance honors the
@@ -95,10 +140,7 @@ export async function POST(req: Request) {
       );
     } catch (err) {
       lastErr = err;
-      console.error(
-        `[animate-step] step ${step_number} attempt ${attempt} failed:`,
-        err,
-      );
+      console.error(`[animate-step] step ${step_number} attempt ${attempt} failed:`, err);
       // Retry once; bail on the second exception.
       if (attempt === 1) continue;
     }

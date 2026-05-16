@@ -67,7 +67,12 @@ For EACH uncertainty:
   Examples:
     "Which exact iPhone model? (— used to pick the correct display assembly P/N)"
     "What is the trap diameter? (— used to size the slip washer and replacement nut)"
-- "options": include 1–3 strings (≤3 words each) ONLY when ≤3 candidates are realistically enumerable from the photo + general knowledge. Otherwise OMIT the field entirely so the UI renders a free-text input.
+- "options": **always populate 3 options** when the field has KNOWN common candidates in the domain (iPhones, common tire sizes, common voltages, standard pipe diameters, etc.). Pick the 3 MOST LIKELY values based on the photo + general knowledge. The UI ALSO renders a free-text fallback under the buttons, so options are never a hard restriction — they're shortcuts for the common case. Each option ≤3 words. Examples of when to populate:
+    * iPhone model → top 3 candidates from the visible generation cluster (e.g. ["iPhone 11", "iPhone 12", "iPhone 13"])
+    * Drain diameter (EU) → ["32 mm", "40 mm", "50 mm"]
+    * Tire valve type → ["Schrader", "Presta", "Dunlop"]
+    * Bike wheel size → ["26 in", "27.5 in", "29 in"]
+  OMIT "options" only when the answer space is truly unbounded (a free serial number, a textual model code with no realistic 3-cluster, a measured value with no standard increments).
 
 Examples of useful uncertainty fields (use what fits the object, do not force all):
 - exact_model_number, brand_model, variant_or_generation
@@ -82,6 +87,7 @@ Do NOT invent uncertainties to look thorough. Empty array if the photo + transcr
 
 OTHER REQUIRED FIELDS:
 - "category" must be exactly one of: vehicle, electronics, plumbing, furniture, other.
+- "defect_marker" pinpoints where on the photo the defect is centered, as percentages of the image box (x=0 is left edge, x=100 is right edge; y=0 is top, y=100 is bottom). The "label" is a 2-4 word English summary of what the marker points at (e.g. "Cracked area", "Leak source", "Flat tire"). Estimate it as precisely as you can from the photo geometry — this drives a pulsing UI marker the user clicks to play the repair video.
 
 OUTPUT RULES:
 - All text fields in ENGLISH (the legacy "_fr"-suffixed names are kept by contract; content is English).
@@ -121,8 +127,8 @@ export async function POST(req: Request) {
     const result = await generateObject({
       model: visionModel(),
       schema: AnalyzeResult,
+      system: SYSTEM_PROMPT,
       messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
         {
           role: 'user',
           content: [

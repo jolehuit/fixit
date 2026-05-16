@@ -11,7 +11,7 @@
  * (createJob/emit/subscribe/closeJob) stays the same.
  */
 
-import type { StreamEvent } from './types';
+import type { ClarifyAnswer, StreamEvent } from './types';
 
 type Subscriber = (event: StreamEvent) => void;
 
@@ -21,9 +21,42 @@ type Channel = {
   subscribers: Set<Subscriber>;
   closed: boolean;
   createdAt: number;
+  /** Original input photo (data URL) — served by GET /api/jobs/[id]/photo. */
+  photoDataUrl: string | null;
 };
 
 const channels = new Map<string, Channel>();
+
+// ---- Interactive clarify: per-job resolver awaiting user answers ----
+
+type ClarifyResolver = (answers: ClarifyAnswer[] | null) => void;
+const clarifyResolvers = new Map<string, ClarifyResolver>();
+
+/**
+ * Pause the orchestrator until the user POSTs answers (or the timeout fires).
+ * Returns the answers, or `null` if the wait timed out / was skipped.
+ */
+export function waitForClarify(jobId: string, timeoutMs: number): Promise<ClarifyAnswer[] | null> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      clarifyResolvers.delete(jobId);
+      resolve(null);
+    }, timeoutMs);
+    clarifyResolvers.set(jobId, (answers) => {
+      clearTimeout(timer);
+      clarifyResolvers.delete(jobId);
+      resolve(answers);
+    });
+  });
+}
+
+/** Called by POST /api/clarify-resolve. Returns true if a waiter was resolved. */
+export function resolveClarify(jobId: string, answers: ClarifyAnswer[] | null): boolean {
+  const resolver = clarifyResolvers.get(jobId);
+  if (!resolver) return false;
+  resolver(answers);
+  return true;
+}
 
 // Garbage-collect closed jobs after a delay so a slow client still has time
 // to drain the buffer.
@@ -41,7 +74,20 @@ export function createJob(jobId: string): void {
     subscribers: new Set(),
     closed: false,
     createdAt: Date.now(),
+    photoDataUrl: null,
   });
+}
+
+/** Attach the original input photo to a job so the frontend can fetch it. */
+export function setPhoto(jobId: string, photoDataUrl: string): void {
+  const ch = channels.get(jobId);
+  if (!ch) return;
+  ch.photoDataUrl = photoDataUrl;
+}
+
+/** Returns null if the job is unknown or the photo wasn't stored. */
+export function getPhoto(jobId: string): string | null {
+  return channels.get(jobId)?.photoDataUrl ?? null;
 }
 
 export function emit(jobId: string, event: StreamEvent): void {
