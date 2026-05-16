@@ -19,36 +19,25 @@ Snap the broken thing. The orchestrator decides what's broken, asks one or two c
 
 ```mermaid
 flowchart TD
-    User([User photo])
-    User --> Run
+    User([Photo]) --> Run[/api/run/]
+    Run --> Classify[classify-photo<br/>OpenAI]
+    Classify -->|cache hit| Cached[Cached MP4]
+    Classify -->|miss| Analyze
 
-    Run["POST /api/run<br/>orchestrator"]
-
-    Run --> Classify["/api/classify-photo<br/>OpenAI vision (triage)"]
-    Classify -->|match + cache configured| Cached["Cached replay<br/>analyze.json + plan.json + mp4<br/>from Vercel Blob"]
-    Classify -->|no match / cache empty| Live
-
-    subgraph Live["Live pipeline"]
+    subgraph Live[Live pipeline]
         direction TB
-        Analyze["/api/analyze<br/>OpenAI GPT-5.5 vision<br/>→ object + defect + marker"]
-        Clarify["/api/clarify ↔ user<br/>OpenAI reasoning<br/>→ 1–2 questions"]
-        Plan["/api/plan<br/>OpenAI + Tavily research<br/>→ N repair steps"]
-        StepLoop["For each step (parallel after #1):<br/>• /api/render-keyframe ×2 · fal gpt-image-2/edit<br/>• /api/animate-step · fal seedance-2.0<br/>• /api/narrate · Gradium TTS"]
-        Stitch["/api/stitch<br/>ffmpeg concat + SRT burn"]
-        Analyze --> Clarify --> Plan --> StepLoop --> Stitch
+        Analyze[analyze<br/>OpenAI] --> Clarify[clarify<br/>OpenAI]
+        Clarify --> Plan[plan<br/>OpenAI + Tavily]
+        Plan --> Step[render ×2 · animate · narrate<br/>fal + fal + Gradium]
+        Step --> Stitch[stitch<br/>ffmpeg]
     end
 
-    Stitch --> Blob[(Vercel Blob<br/>WAV + MP4)]
-    Cached --> Result
-    Blob --> Result([Final video URL])
+    Stitch --> Blob[(Vercel Blob)]
+    Cached --> Video([Video URL])
+    Blob --> Video
 
-    Run -.->|SSE events| Stream
-    Analyze -.-> Stream
-    Clarify -.-> Stream
-    Plan -.-> Stream
-    StepLoop -.-> Stream
-    Stitch -.-> Stream
-    Stream["/api/stream/jobId<br/>Server-Sent Events"] -.->|LiveProgress| User
+    Live -.->|SSE| Stream[stream/jobId]
+    Stream -.-> User
 ```
 
 **Quality auto-tier.** Step 1 runs at `quality: 'high'`; if it crosses 25 s, steps 2..N drop to `medium` so the whole job stays under `maxDuration: 300`.
