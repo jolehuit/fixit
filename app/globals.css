@@ -106,3 +106,30 @@ body {
     box-shadow: 0 0 0 6px rgba(255, 255, 255, 0.18);
   }
 }
+
+@keyframes scan-ray {
+  0% {
+    top: 0%;
+    opacity: 0;
+  }
+  8% {
+    opacity: 1;
+  }
+  92% {
+    opacity: 1;
+  }
+  100% {
+    top: 100%;
+    opacity: 0;
+  }
+}
+
+@keyframes scan-tint {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}

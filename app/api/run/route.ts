@@ -35,7 +35,7 @@ const CLARIFY_WAIT_MS = 45_000;
  * while we audit the generated script in the dev terminal. Flip to `false`
  * once the prompts are good enough to commit to a full video run.
  */
-const SKIP_VIDEO_GENERATION = false;
+const SKIP_VIDEO_GENERATION = true;
 
 /** Pretty-print the full repair plan to the dev terminal before generation. */
 function logRepairPlan(jobId: string, plan: RepairPlan): void {
@@ -164,16 +164,16 @@ async function runLive(jobId: string, input: { photo_url: string; transcript?: s
   let quality: 'high' | 'medium' = 'high';
 
   try {
-    emit(jobId, { type: 'log', message: '> Fixit — pipeline live démarré…' });
+    emit(jobId, { type: 'log', message: '> Fixit — diagnosis started…' });
     emit(jobId, {
       type: 'info',
-      message: 'Pipeline live : GPT-5.5 + fal + Tavily + Gradium. ETA 60–120 s.',
+      message: 'Diagnosis in progress. ETA 60–120 s.',
     });
 
     // ── 1. Analyze ─────────────────────────────────────────────────────────
     emit(jobId, {
       type: 'log',
-      message: "⠋ Analyse de l'image (GPT-5.5 vision, detail:auto)…",
+      message: '⠋ Analyzing the image…',
       transient: true,
     });
 
@@ -183,7 +183,7 @@ async function runLive(jobId: string, input: { photo_url: string; transcript?: s
     });
 
     emit(jobId, { type: 'analyze_done', result: analyzeResult });
-    emit(jobId, { type: 'log', message: `✓ Objet identifié : ${analyzeResult.object}` });
+    emit(jobId, { type: 'log', message: `✓ Object identified: ${analyzeResult.object}` });
 
     // ── 2. Clarify (interactive — pause until the user answers or timeout) ─
     let userAnswers: ClarifyAnswer[] | null = null;
@@ -191,7 +191,7 @@ async function runLive(jobId: string, input: { photo_url: string; transcript?: s
       emit(jobId, { type: 'clarify_needed', uncertainties: analyzeResult.uncertainties });
       emit(jobId, {
         type: 'log',
-        message: `⠋ ${analyzeResult.uncertainties.length} question(s) — en attente de tes réponses…`,
+        message: `⠋ ${analyzeResult.uncertainties.length} question(s) — waiting for your answers…`,
         transient: true,
       });
       userAnswers = await waitForClarify(jobId, CLARIFY_WAIT_MS);
@@ -199,12 +199,12 @@ async function runLive(jobId: string, input: { photo_url: string; transcript?: s
         emit(jobId, { type: 'clarify_done' });
         emit(jobId, {
           type: 'log',
-          message: `✓ Réponses reçues (${userAnswers.length}) — affinage de la procédure`,
+          message: `✓ Answers received (${userAnswers.length}) — refining the procedure`,
         });
       } else {
         emit(jobId, {
           type: 'log',
-          message: '⚠ Pas de réponse dans le temps imparti — procédure la plus probable retenue',
+          message: '⚠ No answer in time — using most probable procedure',
           severity: 'warn',
         });
       }
@@ -213,7 +213,7 @@ async function runLive(jobId: string, input: { photo_url: string; transcript?: s
     // ── 3. Plan ────────────────────────────────────────────────────────────
     emit(jobId, {
       type: 'log',
-      message: '⠋ Recherche de procédures (Tavily + GPT-5.5)…',
+      message: '⠋ Searching repair procedures…',
       transient: true,
     });
 
@@ -225,7 +225,7 @@ async function runLive(jobId: string, input: { photo_url: string; transcript?: s
     emit(jobId, { type: 'plan_done', result: repairPlan });
     emit(jobId, {
       type: 'log',
-      message: `✓ Plan : ${repairPlan.steps.length} étapes · ${repairPlan.total_duration_min} min · ${repairPlan.difficulty}`,
+      message: `✓ Plan: ${repairPlan.steps.length} steps · ${repairPlan.total_duration_min} min · ${repairPlan.difficulty}`,
     });
 
     // Debug dump: print the full plan to the dev server terminal BEFORE we
@@ -235,11 +235,12 @@ async function runLive(jobId: string, input: { photo_url: string; transcript?: s
 
     // ⚠️ Video generation suspended for script-review iteration.
     // Re-enable by removing this block once the plan output is validated.
+    // The photo marker still appears on plan_done (frontend uses Boolean(plan))
+    // — it's visible but click is disabled until chapters/video are ready.
     if (SKIP_VIDEO_GENERATION) {
       emit(jobId, {
         type: 'info',
-        message:
-          'Plan ready. Video generation suspended (script-review mode). Check the dev terminal for the full plan.',
+        message: 'Plan ready. Video generation disabled (test mode).',
       });
       emit(jobId, { type: 'done' });
       return;
@@ -251,7 +252,7 @@ async function runLive(jobId: string, input: { photo_url: string; transcript?: s
 
     emit(jobId, {
       type: 'log',
-      message: `⠋ Génération keyframes + animation + narration (${repairPlan.steps.length} étapes)…`,
+      message: `⠋ Generating step visuals and audio (${repairPlan.steps.length} steps)…`,
       transient: true,
     });
 
@@ -326,7 +327,7 @@ async function runLive(jobId: string, input: { photo_url: string; transcript?: s
       quality = 'medium';
       emit(jobId, {
         type: 'info',
-        message: 'quality:high > 25 s — passage à quality:medium pour les étapes suivantes',
+        message: 'Slow start — switching to faster quality for next steps',
       });
     }
 
@@ -405,25 +406,23 @@ async function runCached(jobId: string, demoId: DemoId) {
       }, delay);
     };
 
-    emitAt(T_initLog, () =>
-      emit(jobId, { type: 'log', message: '> Fixit — pipeline live démarré…' }),
-    );
+    emitAt(T_initLog, () => emit(jobId, { type: 'log', message: '> Fixit — diagnosis started…' }));
     emitAt(T_initInfo, () =>
       emit(jobId, {
         type: 'info',
-        message: 'Pipeline live : GPT-5.5 + fal + Tavily + Gradium. ETA 60–120 s.',
+        message: 'Diagnosis in progress. ETA 60–120 s.',
       }),
     );
     emitAt(T_analyzeStart, () =>
       emit(jobId, {
         type: 'log',
-        message: "⠋ Analyse de l'image (GPT-5.5 vision, detail:auto)…",
+        message: '⠋ Analyzing the image…',
         transient: true,
       }),
     );
     emitAt(T_analyzeDone, () => emit(jobId, { type: 'analyze_done', result: analyze }));
     emitAt(T_objectLog, () =>
-      emit(jobId, { type: 'log', message: `✓ Objet identifié : ${analyze.object.slice(0, 100)}` }),
+      emit(jobId, { type: 'log', message: `✓ Object identified: ${analyze.object.slice(0, 100)}` }),
     );
 
     if (analyze.uncertainties.length > 0) {
@@ -433,20 +432,18 @@ async function runCached(jobId: string, demoId: DemoId) {
       emitAt(T_clarifyWaitLog, () =>
         emit(jobId, {
           type: 'log',
-          message: `⠋ ${analyze.uncertainties.length} question(s) — en attente de réponses simulées…`,
+          message: `⠋ ${analyze.uncertainties.length} question(s) — waiting for your answers…`,
           transient: true,
         }),
       );
       emitAt(T_clarifyDone, () => emit(jobId, { type: 'clarify_done' }));
-      emitAt(T_clarifyDoneLog, () =>
-        emit(jobId, { type: 'log', message: '✓ Réponses prises en compte' }),
-      );
+      emitAt(T_clarifyDoneLog, () => emit(jobId, { type: 'log', message: '✓ Answers received' }));
     }
 
     emitAt(T_planStart, () =>
       emit(jobId, {
         type: 'log',
-        message: '⠋ Recherche de procédures (Tavily + GPT-5.5)…',
+        message: '⠋ Searching repair procedures…',
         transient: true,
       }),
     );
@@ -454,7 +451,7 @@ async function runCached(jobId: string, demoId: DemoId) {
     emitAt(T_planSummaryLog, () =>
       emit(jobId, {
         type: 'log',
-        message: `✓ Plan : ${plan.steps.length} étapes · ${plan.total_duration_min} min · ${plan.difficulty}`,
+        message: `✓ Plan: ${plan.steps.length} steps · ${plan.total_duration_min} min · ${plan.difficulty}`,
       }),
     );
 
@@ -509,7 +506,7 @@ async function runCached(jobId: string, demoId: DemoId) {
     emitAt(T_stitchStartLog, () =>
       emit(jobId, {
         type: 'log',
-        message: '⠋ Assemblage chapter player…',
+        message: '⠋ Assembling chapter player…',
         transient: true,
       }),
     );
