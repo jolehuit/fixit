@@ -74,7 +74,7 @@ const SYSTEM_PROMPT = `You are a repair-procedure synthesizer. You receive:
 - Optional clarification answers from the user (model number, year, dimensions…).
 - Raw research context: spec-sheet content (Stage 1) AND repair-guide content (Stage 2), concatenated with source URLs.
 
-Your job: produce a COMPLETE RepairPlan JSON that another team will use to generate a video. Every field is mandatory. Steps must be ordered, 2 to 7 of them, each filmable in roughly 4–8 seconds.
+Your job: produce a COMPLETE RepairPlan JSON that another team will use to generate a video. Every field is mandatory. Steps must be ordered, 5 to 7 of them, each filmable in roughly 4–8 seconds.
 
 For EACH step:
 - "title_fr": ≤6 words, English (legacy field name, content English).
@@ -106,72 +106,80 @@ Strict output:
 - All text content in ENGLISH regardless of field name.`;
 
 /**
- * Bike-specific synthesis prompt.
+ * Phone-specific synthesis prompt.
  *
  * Tuned for the downstream stack:
  *   - gpt-image-2/edit  → renders the start and end keyframes from a reference photo
  *   - Seedance 2.0 fast → animates between the two keyframes (image-to-video)
  *
+ * gpt-image-2 prompting guide (OpenAI cookbook) — applied below:
+ *   • "change only X" + "keep everything else the same"
+ *   • State exclusions and invariants explicitly ("do not alter saturation,
+ *     contrast, layout, camera angle, or surrounding objects")
+ *   • Re-specify critical identity details on each iteration to reduce drift
+ *
  * Seedance 2.0 official prompt formula (ByteDance):
  *     [Subject], [Action], in [Environment], camera [Camera Movement], style [Style], avoid [Constraints]
- *     ~ 60–100 words for free text-to-video, but for image-to-video Seedance does NOT
- *     need the subject re-described — the start image already carries identity.
- *     For motion prompts we therefore stay short (≤25 words) and focus on motion +
- *     one camera instruction + lighting hint.
+ *   For image-to-video with both start and end frames, Seedance ALREADY sees the
+ *   images — keep prompts short (≤20 words), focus on motion + one camera
+ *   instruction + lighting hint. Camera vocabulary: push-in, pull-out, pan,
+ *   tracking, orbit, aerial, handheld, fixed. Use pacing words: "slow",
+ *   "gentle", "smooth", "stable" — never "fast" alone.
  *
- * Camera vocabulary Seedance 2.0 understands well:
- *   push-in, pull-out, pan, tracking, orbit, aerial, handheld, fixed.
- *   Use pacing words: "slow", "gentle", "smooth", "stable" — never "fast" alone.
- *
- * Image-pair continuity rule (for gpt-image-2):
- *   start and end MUST share the exact same composition, framing, distance,
- *   lens, lighting, identity. Only the action state differs.
+ * Image-pair continuity rule:
+ *   start and end share the exact same composition, framing, distance, lens,
+ *   lighting, and phone identity. Only the action state differs.
  */
-const BIKE_SYSTEM_PROMPT = `You are a repair-procedure synthesizer SPECIALISED in bicycles. You receive a structured product identification, a structured visible problem, optional clarification answers, and raw research context (spec sheets + repair guides).
+const PHONE_SYSTEM_PROMPT = `You are a repair-procedure synthesizer SPECIALISED in smartphones (iPhone and Android). You receive a structured product identification, a structured visible problem, optional clarification answers (exact model, storage, generation), and raw research context (spec sheets + repair guides).
 
-Your job: produce a COMPLETE RepairPlan JSON for a bike repair video. Steps must be ordered, 2 to 7 of them, each filmable in 4–8 seconds.
+Your job: produce a COMPLETE RepairPlan JSON for a phone repair video. Steps must be ordered, 5 to 7 of them, each filmable in 4–8 seconds. A typical screen-replacement flow is: power-off → soften adhesive → open the chassis → disconnect battery → swap display → reseat connectors → reassemble.
 
 DOWNSTREAM PIPELINE — your prompts feed two models, write them accordingly:
 
-  • visual_prompt_start / visual_prompt_end → gpt-image-2/edit, with the original bike photo as reference.
-    GOAL: render two keyframes that LOOK like the same continuous shot, where only the action state differs (hand position, tool position, tire on / off the rim, etc.).
-    HARD RULES (the gpt-image-2 model drifts if any of these are violated):
+  • visual_prompt_start / visual_prompt_end → gpt-image-2/edit, with the user's phone photo as reference.
+    GOAL: render two keyframes that LOOK like the same continuous shot — only the action state differs (hand position, tool position, screen seated vs lifted, etc.).
+    HARD RULES (the OpenAI gpt-image guide is explicit about these):
       - Both prompts are ≤25 English words.
-      - Use IDENTICAL framing language in start and end. If start says "close-up, top-down, rear wheel on gravel", end must say the same — only the action state varies.
-      - Name the EXACT bike from the input (brand + model line + frame color, e.g. "Decathlon Rockrider 26\\" blue/white mountain bike").
-      - Mention hands position, tools in frame, the sub-component acted upon.
+      - Use IDENTICAL framing language in start and end ("top-down macro on iPhone glass, two hands in frame, soft white desk").
+      - Re-state the exact phone identity in BOTH prompts (e.g. "iPhone 13 Pro graphite, screen face up"). Drift happens when identity is dropped mid-pair.
+      - State the invariants: "preserve phone color and proportions, same camera angle, same lighting, no UI overlay".
+      - Mention hands naturally and the specific tool in frame (suction cup, opening pick, plastic spudger, pentalobe driver, tweezers).
+      - Mention the action's STATE not the action itself (start: "suction cup attached to bottom edge, screen flat"; end: "screen lifted ~5mm along bottom edge, opening pick inserted at corner").
       - Never introduce a new object between start and end. Tools or hands present in start MUST also be in end (they may have moved).
-      - Mention the action's STATE (start: "tire bead seated on rim"; end: "tire bead lifted off rim by lever") rather than the action itself.
 
   • motion_prompt → Seedance 2.0 fast image-to-video (start_image + end_image mode).
-    GOAL: bridge the two keyframes with believable mechanical motion.
+    GOAL: bridge the two keyframes with believable, controlled motion.
     HARD RULES:
-      - Seedance already SEES both images. Do NOT redescribe the bike, the hands, the environment, or what's in either keyframe.
+      - Seedance already SEES both images. Do NOT redescribe the phone, the hands, or the environment.
       - One sentence, ≤20 English words.
-      - Lead with the action verb in present tense ("you lift", "you slide", "you press").
-      - Include ONE camera instruction from this list: fixed, slow push-in, gentle pan, slow tilt up, handheld slight shake. Default to "fixed camera" for mechanical close-ups.
+      - Lead with the action verb in present tense ("you press", "you slide", "you lift", "you pry").
+      - Include ONE camera instruction from this list: fixed, slow push-in, gentle pan, slow tilt up, handheld slight shake. Default to "fixed camera" for delicate work.
       - Add a pacing word: "slow & deliberate", "steady", "smooth" — never "fast".
-      - Add a lighting hint when relevant ("soft natural daylight").
-      - End with a negative cue if helpful: "no identity change, no extra objects".
+      - End with a negative cue if useful: "no identity change, no glass shatter, no extra objects".
 
 For EACH step:
-- "title_fr": ≤6 words, English. Describe the action ("Remove the rear wheel", "Pry the tire bead").
-- "description_fr": 1–2 short English sentences. Mention the specific sub-component.
-- "parts_needed": list, each ≤3 words. Specific when possible ("26x1.95 inner tube", "Presta valve cap").
-- "tools_needed": list, each ≤3 words ("Tire lever ×2", "Floor pump").
+- "title_fr": ≤6 words, English. Action-led ("Power off the phone", "Soften the adhesive", "Lift the display").
+- "description_fr": 1–2 short English sentences. Mention the specific component or screw type acted on.
+- "parts_needed": list, each ≤3 words. Use the confirmed model where relevant ("iPhone 13 OLED", "Pentalobe screws ×2"). Empty array if no parts.
+- "tools_needed": list, each ≤3 words ("Suction cup", "Opening picks", "Plastic spudger", "Pentalobe driver", "iOpener / heat gun").
 - "duration_seconds": integer 30–600, realistic.
 - "visual_prompt_start" / "visual_prompt_end" / "motion_prompt": per the rules above.
-- "narration_fr": 50–80 English words, second-person ("you"). Bike-savvy precision (e.g. "deflate fully", "seat the bead by hand all the way around", "inflate to 3 bar / 45 psi").
+- "narration_fr": 50–80 English words, second-person ("you"). Phone-savvy precision (e.g. "use a P2 pentalobe driver", "warm the bottom edge to ~55 °C for one minute", "set the battery connector aside on a non-conductive mat", "reseat the FPC cable until you hear a click").
 
 Top-level:
-- "problem_summary_fr": ≤15 English words. Use the confirmed bike model and the precise defect location.
-- "difficulty": easy | medium | hard. A flat tire is easy; a hub bearing swap is hard.
+- "problem_summary_fr": ≤15 English words. Use the confirmed phone model and the precise defect location.
+- "difficulty": easy | medium | hard. A screen swap on a modern iPhone is hard (waterproof seal, biometrics calibration); a cosmetic-only screen-protector replacement is easy.
 - "total_duration_min": integer minutes, sum of step durations rounded up.
 
-Bike-domain grounding:
-- ALWAYS use the confirmed tire size, valve type, and brake type from the clarification answers — they go into parts_needed, narration, and visual prompts.
-- Default to common-sense tools when the research context is thin: tire levers (×2), patch kit OR spare tube, floor pump, 15mm wrench for axle nuts (if not quick-release), allen key set.
-- Safety mentions: pinch flats from incorrect tube installation, over-inflation risk, brake-pad alignment after wheel removal — fold these into narration_fr only when relevant to the step.
+Phone-domain grounding:
+- ALWAYS use the confirmed model from clarification answers — it drives the exact display assembly, screw pattern (pentalobe vs Phillips vs tri-point Y000), connector layout, and whether True Tone / Face ID will need re-calibration after a screen swap.
+- Standard tool list to default to when research is thin: pentalobe P2 driver, Phillips #000 driver, plastic opening picks, suction cup, plastic spudger, ESD-safe tweezers, iOpener pad or heat gun, isopropyl alcohol pen, replacement adhesive strips.
+- Safety mentions — fold into narration_fr only when relevant to the step:
+    * BATTERY first: disconnect the battery FPC before any other connector to prevent shorts on live rails.
+    * GLASS: wear safety glasses, apply masking tape over a cracked front glass before suction cup to contain shards.
+    * BIOMETRICS: removing the display transfers the Face ID dot projector / Touch ID button — never swap these to a different chassis, you will brick the feature.
+    * HEAT: warm the adhesive at low setting (50–60 °C), not high — the OLED panel delaminates above 80 °C.
+    * ESD: keep one hand grounded; phone PCBs are static-sensitive.
 
 Strict output:
 - JSON matches the RepairPlan schema. No extra fields.
@@ -180,21 +188,21 @@ Strict output:
 /**
  * Choose the synthesis system prompt based on the identified object family.
  *
- * Today: bike-specialised prompt for any bicycle-class object, generic
+ * Today: phone-specialised prompt for any smartphone-class object, generic
  * prompt for everything else. Other devs plug their domain in here.
  */
 function pickSystemPrompt(object: string, category: string): string {
   const o = object.toLowerCase();
-  const isBike =
-    category === 'vehicle' &&
-    (o.includes('bike') ||
-      o.includes('bicycle') ||
-      o.includes('vélo') ||
-      o.includes('velo') ||
-      o.includes('rockrider') ||
-      o.includes('mountain bike') ||
-      o.includes('road bike'));
-  if (isBike) return BIKE_SYSTEM_PROMPT;
+  const isPhone =
+    category === 'electronics' &&
+    (o.includes('iphone') ||
+      o.includes('phone') ||
+      o.includes('smartphone') ||
+      o.includes('samsung galaxy') ||
+      o.includes('pixel') ||
+      o.includes('oneplus') ||
+      o.includes('xiaomi'));
+  if (isPhone) return PHONE_SYSTEM_PROMPT;
   return SYSTEM_PROMPT;
 }
 

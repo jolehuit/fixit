@@ -156,7 +156,7 @@ export const RepairPlan = z.object({
   problem_summary_fr: z.string(),
   difficulty: Difficulty,
   total_duration_min: z.number().positive(),
-  steps: z.array(RepairStep).min(2).max(7),
+  steps: z.array(RepairStep).min(5).max(7),
   // ---- New optional plan-level enrichments (backward compatible) ----
   /** Estimated parts cost range, in euros. */
   estimated_cost_eur: EstimatedCost.optional(),
