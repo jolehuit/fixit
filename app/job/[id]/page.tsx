@@ -20,9 +20,11 @@ function JobInner({ jobId }: { jobId: string }) {
   const [imageFailed, setImageFailed] = useState(false);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [analyzeDone, setAnalyzeDone] = useState(false);
   const [analyzeMarker, setAnalyzeMarker] = useState<DefectMarker | null>(null);
 
   const onAnalyze = (a: AnalyzeResult) => {
+    setAnalyzeDone(true);
     if (a.defect_marker) setAnalyzeMarker(a.defect_marker);
   };
 
@@ -34,8 +36,13 @@ function JobInner({ jobId }: { jobId: string }) {
   const headline = demo ? demo.title : 'Diagnosing your repair';
   const metaLine = demo ? demo.category : 'Live pipeline · Your photo';
 
-  // Marker resolution: AI-detected (live) takes precedence over demo's static one.
-  const marker = analyzeMarker ?? demo?.marker ?? null;
+  // Marker priority: for a known demo we trust our hand-tuned coordinates
+  // (the AI's guess can drift); only for true free uploads do we accept the
+  // AI's defect_marker.
+  const marker = demo?.marker ?? analyzeMarker ?? null;
+
+  // Scan overlay shows while the vision model is still working on the photo.
+  const scanning = !analyzeDone && !imageFailed && Boolean(imgSrc);
 
   return (
     <>
@@ -69,6 +76,7 @@ function JobInner({ jobId }: { jobId: string }) {
                 className="h-full w-full object-cover"
               />
             )}
+            {scanning ? <ScanningOverlay /> : null}
             {ready && !imageFailed && marker ? (
               <button
                 type="button"
@@ -126,6 +134,47 @@ function JobInner({ jobId }: { jobId: string }) {
         />
       ) : null}
     </>
+  );
+}
+
+function ScanningOverlay() {
+  return (
+    <div
+      aria-hidden
+      className="pointer-events-none absolute inset-0 animate-[fade-in_240ms_ease-out] overflow-hidden"
+    >
+      {/* subtle dark veil so the scan is visible on bright photos */}
+      <div className="absolute inset-0 bg-black/15" />
+      {/* faint grid that pulses */}
+      <div
+        className="absolute inset-0 animate-[grid-pulse_2.4s_ease-in-out_infinite]"
+        style={{
+          backgroundImage:
+            'linear-gradient(to right, rgba(0,102,204,0.18) 1px, transparent 1px), linear-gradient(to bottom, rgba(0,102,204,0.18) 1px, transparent 1px)',
+          backgroundSize: '24px 24px',
+        }}
+      />
+      {/* sweeping scan line */}
+      <div className="absolute inset-x-0 h-1/2 animate-[scan-sweep_2.4s_ease-in-out_infinite]">
+        <div
+          className="h-full w-full"
+          style={{
+            background:
+              'linear-gradient(to bottom, rgba(0,102,204,0) 0%, rgba(0,102,204,0.35) 80%, rgba(0,102,204,0.9) 100%)',
+            boxShadow: '0 -1px 0 0 rgba(0,102,204,0.9)',
+          }}
+        />
+      </div>
+      {/* label */}
+      <div className="absolute bottom-3 left-3 flex items-center gap-2 rounded-md bg-black/70 px-2.5 py-1 text-xs font-medium text-white backdrop-blur">
+        <span className="inline-flex items-end gap-0.5">
+          <span className="h-1.5 w-1.5 animate-[dot_1.2s_ease-in-out_infinite] rounded-full bg-white" />
+          <span className="h-1.5 w-1.5 animate-[dot_1.2s_ease-in-out_-0.2s_infinite] rounded-full bg-white" />
+          <span className="h-1.5 w-1.5 animate-[dot_1.2s_ease-in-out_-0.4s_infinite] rounded-full bg-white" />
+        </span>
+        AI scanning your photo
+      </div>
+    </div>
   );
 }
 

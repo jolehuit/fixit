@@ -90,10 +90,36 @@ For EACH step:
 - "motion_prompt": ≤1 English sentence describing what physically changes (the action), in the present tense ("you turn", "you slide"). The downstream video model will be additionally told to keep the camera and scene fixed — your motion prompt only needs to describe the action itself, NOT the framing.
 - "narration_fr": 50–80 words, English (legacy field name), second-person ("you"). Describe what the user does, with the precision the research context allows (e.g. mention specific torque, screw type, washer orientation). Pace must match duration_seconds.
 
+Per-step OPTIONAL enrichments (fill when adding value — every step should have at least subtitle_fr and success_criteria_fr):
+- "shot_type": e.g. "macro close-up", "medium shot, two hands", "top-down 45°".
+- "camera_movement": e.g. "static", "slow push-in", "subtle parallax", consistent with the scene_lock.camera_default.
+- "motion_pacing": "slow & deliberate" | "snappy" | "steady".
+- "subject_focus_fr": ≤10 English words, what the viewer should look at this step.
+- "subtitle_fr": ≤55 chars English caption to burn in. Active voice, no period at the end.
+- "safety_note_fr": ≤20 English words. Only when there is a real risk (pinch, mains, gas, glass).
+- "success_criteria_fr": ≤20 English words. How the user knows the step worked.
+- "common_mistake_fr": ≤20 English words. The single most common mistake at this step.
+
 Top-level:
 - "problem_summary_fr": ≤15 words, English. Restate the defect with its location precisely.
 - "difficulty": easy | medium | hard. Calibrate by the count and risk of disassembly + tool requirements.
 - "total_duration_min": integer minutes, sum of step durations rounded up.
+
+Top-level OPTIONAL enrichments (fill whenever you can — they make the UI richer):
+- "estimated_cost_eur": { parts_low, parts_high } — integers in euros. Be honest about the spread (€2–€8 is fine for a patch kit).
+- "safety_pre_check_fr": 1–4 short English bullets shown before step 1 (e.g. "Wear gloves", "Switch off mains").
+- "parts_summary": consolidated unique parts across all steps. Each: { name, quantity, specification_fr }. specification_fr is the dimension / standard that matters for ordering (e.g. "26x1.95 inner tube, Schrader valve").
+- "tools_summary": consolidated unique tools across all steps. Each: { name, required (true/false), specification_fr }. Mark "required: false" for nice-to-have items.
+- "scene_lock": a SHARED visual continuity bundle used by EVERY step. Helps the video model keep the scene consistent across cuts.
+    * subject: one short English phrase identifying the object as seen in the photo (use the input identification).
+    * environment: where the action happens ("indoors, neutral floor", "kitchen sink, well lit").
+    * hands_style: "bare adult hands, clean nails" by default; adjust if relevant.
+    * style: "clean instructional documentary, soft natural light, real materials, no text overlay".
+    * color_palette_fr: dominant colors of the subject in English (e.g. "white and blue frame, black tires, gravel floor").
+    * shot_default: the default framing repeated across steps (e.g. "medium close-up, 35mm equivalent").
+    * camera_default: default movement (usually "static" or "very slow push-in").
+    * consistency_phrases: 2–5 short English phrases that MUST appear in every visual_prompt_start/end to lock identity (e.g. ["Decathlon Rockrider 26" mountain bike", "blue and white frame", "rear wheel on gravel"]).
+    * negative_cues: 2–5 short English phrases to avoid (e.g. ["text overlay", "different bike model", "indoor studio backdrop"]).
 
 Grounding rules:
 - Prefer the research context for procedure, parts, and tools. Fall back on general repair knowledge only when context is thin.

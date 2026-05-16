@@ -78,6 +78,45 @@ export type ClarifyOptions = z.infer<typeof ClarifyOptions>;
 
 // ---------- Repair plan ----------
 
+// ---- Part / tool summaries (plan-level enrichments) ----
+
+export const PartSummary = z.object({
+  name: z.string(),
+  quantity: z.number().nonnegative().default(1),
+  specification_fr: z.string().optional(),
+});
+export type PartSummary = z.infer<typeof PartSummary>;
+
+export const ToolSummary = z.object({
+  name: z.string(),
+  required: z.boolean().default(true),
+  specification_fr: z.string().optional(),
+});
+export type ToolSummary = z.infer<typeof ToolSummary>;
+
+export const EstimatedCost = z.object({
+  parts_low: z.number().nonnegative(),
+  parts_high: z.number().nonnegative(),
+});
+export type EstimatedCost = z.infer<typeof EstimatedCost>;
+
+// ---- Visual continuity bundle (scene lock for keyframes) ----
+
+export const SceneLock = z.object({
+  subject: z.string().optional(),
+  environment: z.string().optional(),
+  hands_style: z.string().optional(),
+  style: z.string().optional(),
+  color_palette_fr: z.string().optional(),
+  shot_default: z.string().optional(),
+  camera_default: z.string().optional(),
+  consistency_phrases: z.array(z.string()).optional(),
+  negative_cues: z.array(z.string()).optional(),
+});
+export type SceneLock = z.infer<typeof SceneLock>;
+
+// ---- Steps ----
+
 export const RepairStep = z.object({
   step_number: z.number().int().positive(),
   title_fr: z.string(),
@@ -93,6 +132,23 @@ export const RepairStep = z.object({
   motion_prompt: z.string(),
   /** Narration text (50–80 words) fed to Gradium TTS */
   narration_fr: z.string(),
+  // ---- New optional enrichments (backward compatible) ----
+  /** Cinematic shot type: "macro close-up", "medium", "over-the-shoulder", etc. */
+  shot_type: z.string().optional(),
+  /** Camera movement description for Seedance. */
+  camera_movement: z.string().optional(),
+  /** Motion pacing: "slow & deliberate", "snappy", etc. */
+  motion_pacing: z.string().optional(),
+  /** What the viewer should focus on in this step. */
+  subject_focus_fr: z.string().optional(),
+  /** Short burn-in subtitle (≤ 60 chars). */
+  subtitle_fr: z.string().optional(),
+  /** Safety note specific to this step (PPE, current off, etc.). */
+  safety_note_fr: z.string().optional(),
+  /** How to know the step succeeded. */
+  success_criteria_fr: z.string().optional(),
+  /** A common mistake to avoid here. */
+  common_mistake_fr: z.string().optional(),
 });
 export type RepairStep = z.infer<typeof RepairStep>;
 
@@ -101,6 +157,17 @@ export const RepairPlan = z.object({
   difficulty: Difficulty,
   total_duration_min: z.number().positive(),
   steps: z.array(RepairStep).min(2).max(10),
+  // ---- New optional plan-level enrichments (backward compatible) ----
+  /** Estimated parts cost range, in euros. */
+  estimated_cost_eur: EstimatedCost.optional(),
+  /** Pre-flight safety checks shown before step 1. */
+  safety_pre_check_fr: z.array(z.string()).optional(),
+  /** Roll-up of parts across all steps. */
+  parts_summary: z.array(PartSummary).optional(),
+  /** Roll-up of tools across all steps. */
+  tools_summary: z.array(ToolSummary).optional(),
+  /** Visual continuity bundle for video generation. */
+  scene_lock: SceneLock.optional(),
 });
 export type RepairPlan = z.infer<typeof RepairPlan>;
 

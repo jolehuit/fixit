@@ -560,49 +560,195 @@ function PlanCard({
   plan: RepairPlan;
   progress: Record<number, StepProgress>;
 }) {
+  const [expandedStep, setExpandedStep] = useState<number | null>(null);
+  const cost = plan.estimated_cost_eur;
+  const safety = plan.safety_pre_check_fr ?? [];
+  const parts = plan.parts_summary ?? [];
+  const tools = plan.tools_summary ?? [];
+
   return (
-    <section className="flex animate-[fade-in_220ms_ease-out] flex-col gap-3 rounded-lg border border-[color:var(--color-border)] bg-white p-4">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h3 className="text-sm font-semibold text-[color:var(--color-fg)]">Repair plan</h3>
-        <span className="text-xs text-[color:var(--color-muted)]">
-          {plan.steps.length} steps · {plan.difficulty} · ~{plan.total_duration_min} min
-        </span>
+    <section className="flex animate-[fade-in_220ms_ease-out] flex-col gap-4 rounded-lg border border-[color:var(--color-border)] bg-white p-4">
+      <div className="flex flex-col gap-1">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h3 className="text-sm font-semibold text-[color:var(--color-fg)]">Repair plan</h3>
+          <span className="text-xs text-[color:var(--color-muted)]">
+            {plan.steps.length} steps · {plan.difficulty} · ~{plan.total_duration_min} min
+            {cost ? ` · €${cost.parts_low}–${cost.parts_high}` : null}
+          </span>
+        </div>
+        <p className="text-sm text-[color:var(--color-fg)]">{plan.problem_summary_fr}</p>
       </div>
-      <p className="text-sm text-[color:var(--color-fg)]">{plan.problem_summary_fr}</p>
-      <ol className="flex flex-col gap-2 text-sm">
+
+      {safety.length > 0 ? (
+        <div className="flex flex-col gap-1.5 rounded-md border border-[color:var(--color-warn)]/30 bg-[color:var(--color-warn)]/5 px-3 py-2">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-[color:var(--color-warn)]">
+            Before you start
+          </span>
+          <ul className="ml-4 list-disc text-xs text-[color:var(--color-fg)]">
+            {safety.map((s) => (
+              <li key={s}>{s}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {parts.length > 0 || tools.length > 0 ? (
+        <div className="grid gap-3 sm:grid-cols-2">
+          {parts.length > 0 ? (
+            <Roll
+              label="Parts"
+              items={parts.map((p) => ({
+                name: p.name,
+                detail: p.specification_fr,
+                meta: p.quantity > 1 ? `×${p.quantity}` : null,
+              }))}
+            />
+          ) : null}
+          {tools.length > 0 ? (
+            <Roll
+              label="Tools"
+              items={tools.map((t) => ({
+                name: t.name,
+                detail: t.specification_fr,
+                meta: t.required === false ? 'optional' : null,
+              }))}
+            />
+          ) : null}
+        </div>
+      ) : null}
+
+      <ol className="flex flex-col gap-1.5 text-sm">
         {plan.steps.map((s) => {
           const p = progress[s.step_number] ?? {};
           const keyframesOk = Boolean(p.keyframeStart && p.keyframeEnd);
           const animOk = Boolean(p.animationUrl);
           const narrOk = Boolean(p.narrationUrl);
           const allOk = keyframesOk && animOk && narrOk;
+          const expanded = expandedStep === s.step_number;
+          const hasDetails = Boolean(
+            s.success_criteria_fr ||
+              s.common_mistake_fr ||
+              s.safety_note_fr ||
+              s.subtitle_fr ||
+              s.description_fr,
+          );
           return (
             <li
               key={s.step_number}
-              className="flex items-center justify-between gap-3 rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 py-2"
+              className="overflow-hidden rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-surface)]"
             >
-              <span className="flex items-center gap-2">
-                <span
-                  className={`inline-flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-semibold ${
-                    allOk
-                      ? 'bg-[color:var(--color-accent)] text-white'
-                      : 'bg-white text-[color:var(--color-muted)] ring-1 ring-[color:var(--color-border-strong)]'
-                  }`}
-                >
-                  {s.step_number}
+              <button
+                type="button"
+                onClick={() => setExpandedStep(expanded ? null : hasDetails ? s.step_number : null)}
+                disabled={!hasDetails}
+                className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left transition hover:bg-white disabled:cursor-default disabled:hover:bg-[color:var(--color-surface)]"
+              >
+                <span className="flex items-center gap-2">
+                  <span
+                    className={`inline-flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-semibold ${
+                      allOk
+                        ? 'bg-[color:var(--color-accent)] text-white'
+                        : 'bg-white text-[color:var(--color-muted)] ring-1 ring-[color:var(--color-border-strong)]'
+                    }`}
+                  >
+                    {s.step_number}
+                  </span>
+                  <span className="text-[color:var(--color-fg)]">{s.title_fr}</span>
                 </span>
-                <span className="text-[color:var(--color-fg)]">{s.title_fr}</span>
-              </span>
-              <span className="flex items-center gap-1">
-                <ProgressDot ok={keyframesOk} label="frames" />
-                <ProgressDot ok={animOk} label="anim" />
-                <ProgressDot ok={narrOk} label="voice" />
-              </span>
+                <span className="flex items-center gap-1">
+                  <ProgressDot ok={keyframesOk} label="frames" />
+                  <ProgressDot ok={animOk} label="anim" />
+                  <ProgressDot ok={narrOk} label="voice" />
+                </span>
+              </button>
+              {expanded ? (
+                <div className="flex flex-col gap-2 border-t border-[color:var(--color-border)] bg-white px-3 py-2.5 text-xs">
+                  {s.description_fr ? (
+                    <p className="text-[color:var(--color-fg)]">{s.description_fr}</p>
+                  ) : null}
+                  {s.subtitle_fr ? <DetailRow label="Caption" value={s.subtitle_fr} /> : null}
+                  {s.success_criteria_fr ? (
+                    <DetailRow tone="success" label="Success" value={s.success_criteria_fr} />
+                  ) : null}
+                  {s.common_mistake_fr ? (
+                    <DetailRow tone="warn" label="Watch out" value={s.common_mistake_fr} />
+                  ) : null}
+                  {s.safety_note_fr ? (
+                    <DetailRow tone="danger" label="Safety" value={s.safety_note_fr} />
+                  ) : null}
+                </div>
+              ) : null}
             </li>
           );
         })}
       </ol>
     </section>
+  );
+}
+
+function Roll({
+  label,
+  items,
+}: {
+  label: string;
+  items: { name: string; detail?: string; meta: string | null }[];
+}) {
+  if (items.length === 0) return null;
+  return (
+    <div className="flex flex-col gap-1.5 rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-surface)]/40 px-3 py-2">
+      <span className="text-[10px] font-semibold uppercase tracking-wider text-[color:var(--color-subtle)]">
+        {label}
+      </span>
+      <ul className="flex flex-col gap-1 text-xs">
+        {items.map((it) => (
+          <li key={it.name} className="flex items-baseline justify-between gap-2">
+            <span className="text-[color:var(--color-fg)]">
+              <span className="font-medium">{it.name}</span>
+              {it.detail ? (
+                <span className="ml-1 text-[color:var(--color-muted)]">· {it.detail}</span>
+              ) : null}
+            </span>
+            {it.meta ? (
+              <span className="shrink-0 rounded-full bg-white px-1.5 py-0.5 text-[10px] font-medium text-[color:var(--color-muted)] ring-1 ring-[color:var(--color-border)]">
+                {it.meta}
+              </span>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function DetailRow({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone?: 'success' | 'warn' | 'danger';
+}) {
+  const dot = {
+    success: 'bg-[color:var(--color-accent)]',
+    warn: 'bg-[color:var(--color-warn)]',
+    danger: 'bg-[color:var(--color-danger)]',
+  }[tone ?? 'success'];
+  const labelColor = {
+    success: 'text-[color:var(--color-accent)]',
+    warn: 'text-[color:var(--color-warn)]',
+    danger: 'text-[color:var(--color-danger)]',
+  }[tone ?? 'success'];
+  return (
+    <div className="flex items-start gap-2">
+      <span className={`mt-1.5 inline-block h-1.5 w-1.5 shrink-0 rounded-full ${dot}`} />
+      <div className="flex flex-col">
+        <span className={`text-[10px] font-semibold uppercase tracking-wider ${labelColor}`}>
+          {label}
+        </span>
+        <span className="text-[color:var(--color-fg)]">{value}</span>
+      </div>
+    </div>
   );
 }
 
