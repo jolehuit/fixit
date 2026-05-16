@@ -17,11 +17,22 @@ export default function HomePage() {
           <button
             type="button"
             onClick={() => setMode('choose')}
-            className="flex items-center gap-2"
+            className="flex items-center gap-1"
             aria-label="Back to home"
           >
-            {/* biome-ignore lint/performance/noImgElement: brand logo, small static asset */}
-            <img src="/logo.webp" alt="fixit" className="h-10 w-auto" />
+            <span className="relative inline-flex h-12 w-12 shrink-0 items-center justify-start overflow-hidden">
+              {/* biome-ignore lint/performance/noImgElement: tiny static brand mark */}
+              <img
+                src="/logo.webp"
+                alt=""
+                aria-hidden
+                className="h-full w-auto max-w-none"
+              />
+            </span>
+            <span className="text-3xl font-bold leading-none tracking-tight text-[color:var(--color-fg)] sm:text-4xl">
+              <span>Fix</span>
+              <span className="text-[color:var(--color-accent)]">IT</span>
+            </span>
           </button>
           {mode !== 'choose' ? (
             <button
