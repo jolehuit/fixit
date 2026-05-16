@@ -2,12 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "fluid": true,
   "functions": {
-    "app/api/stitch/route.ts": {
-      "memory": 2048,
-      "maxDuration": 300
-    },
     "app/api/run/route.ts": {
-      "memory": 2048,
       "maxDuration": 300
     },
     "app/api/animate-step/route.ts": {
