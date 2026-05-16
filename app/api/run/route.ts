@@ -33,7 +33,7 @@ const CLARIFY_WAIT_MS = 45_000;
  * while we audit the generated script in the dev terminal. Flip to `false`
  * once the prompts are good enough to commit to a full video run.
  */
-const SKIP_VIDEO_GENERATION = true;
+const SKIP_VIDEO_GENERATION = false;
 
 /** Pretty-print the full repair plan to the dev terminal before generation. */
 function logRepairPlan(jobId: string, plan: RepairPlan): void {
