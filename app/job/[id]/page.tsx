@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Suspense, use, useState } from 'react';
+import { Suspense, use, useEffect, useState } from 'react';
 import type { Chapter } from '@/components/ChapterPlayer';
 import { ChapterPlayerModal } from '@/components/ChapterPlayerModal';
 import { LiveProgress } from '@/components/LiveProgress';
@@ -38,12 +38,16 @@ function JobInner({ jobId }: { jobId: string }) {
   //   1. cachedPhotoUrl  — Vercel Blob URL from the demo manifest (prod-safe)
   //   2. /api/jobs/<id>/photo — in-memory data URL stashed by /api/run
   //                              (works for free uploads; also fine in dev)
-  //   3. demo.photo_url  — local /public/demos/... copy (dev fallback only)
-  // `imageFailed` short-circuits the priority and falls straight to the demo
-  // path if anything in the chain 404s in the browser.
-  const imgSrc = imageFailed
-    ? (demo?.photo_url ?? null)
-    : (cachedPhotoUrl ?? `/api/jobs/${jobId}/photo`);
+  //   3. demo.photo_url  — local /public/demos/... copy fallback
+  // `imageFailed` only triggers when (2) 404s on prod (cross-instance memory);
+  // we then fall back to (3) without showing the emoji placeholder.
+  const imgSrc =
+    cachedPhotoUrl ?? (imageFailed ? (demo?.photo_url ?? null) : `/api/jobs/${jobId}/photo`);
+  // Reset the failure flag once a cached photo URL arrives — lets the cached
+  // image take over after the initial /api/jobs/<id>/photo 404 on prod.
+  useEffect(() => {
+    if (cachedPhotoUrl) setImageFailed(false);
+  }, [cachedPhotoUrl]);
   // Marker appears as soon as analyze has located the defect — even if the
   // tutorial isn't generated yet (skip mode). Click is gated to chapters/video.
   const analyzeRan = Boolean(analyzeMarker) || Boolean(plan);
@@ -52,7 +56,9 @@ function JobInner({ jobId }: { jobId: string }) {
 
   // Marker resolution: AI-detected (live) takes precedence over demo's static one.
   const marker = analyzeMarker ?? demo?.marker ?? null;
-  const scanning = !analyzeRan && !imageFailed && Boolean(imgSrc);
+  // Whether the photo is renderable (haven't exhausted all fallbacks).
+  const photoRenderable = Boolean(imgSrc) && !(imageFailed && !cachedPhotoUrl && !demo?.photo_url);
+  const scanning = !analyzeRan && photoRenderable;
 
   return (
     <>
@@ -65,7 +71,18 @@ function JobInner({ jobId }: { jobId: string }) {
           </div>
           <h1 className="text-balance text-2xl font-bold leading-tight sm:text-3xl">{headline}</h1>
           <div className="relative aspect-[4/3] w-full overflow-hidden rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-surface)]">
-            {!imgSrc || imageFailed ? (
+            {imgSrc ? (
+              // biome-ignore lint/performance/noImgElement: native img + onError fallback
+              <img
+                // key by imgSrc so React re-mounts when the source changes
+                // (e.g. /api/jobs/<id>/photo 404 → demo.photo_url retry).
+                key={imgSrc}
+                src={imgSrc}
+                alt={demo?.short ?? 'Uploaded for diagnosis'}
+                onError={() => setImageFailed(true)}
+                className="h-full w-full object-cover"
+              />
+            ) : (
               <div className="flex h-full w-full items-center justify-center px-4 text-center">
                 {demo ? (
                   <span aria-hidden className="text-8xl opacity-70">
@@ -77,14 +94,6 @@ function JobInner({ jobId }: { jobId: string }) {
                   </span>
                 )}
               </div>
-            ) : (
-              // biome-ignore lint/performance/noImgElement: native img + onError fallback
-              <img
-                src={imgSrc}
-                alt={demo?.short ?? 'Uploaded for diagnosis'}
-                onError={() => setImageFailed(true)}
-                className="h-full w-full object-cover"
-              />
             )}
             {scanning ? (
               <div
@@ -104,7 +113,7 @@ function JobInner({ jobId }: { jobId: string }) {
                 />
               </div>
             ) : null}
-            {analyzeRan && !imageFailed && marker
+            {analyzeRan && photoRenderable && marker
               ? (() => {
                   const canPlay = Boolean(chapters) || Boolean(videoUrl);
                   const tooltipText = canPlay
