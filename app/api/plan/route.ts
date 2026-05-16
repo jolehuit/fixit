@@ -74,7 +74,7 @@ const SYSTEM_PROMPT = `You are a repair-procedure synthesizer. You receive:
 - Optional clarification answers from the user (model number, year, dimensions…).
 - Raw research context: spec-sheet content (Stage 1) AND repair-guide content (Stage 2), concatenated with source URLs.
 
-Your job: produce a COMPLETE RepairPlan JSON that another team will use to generate a video. Every field is mandatory. Steps must be ordered, 2 to 10 of them, each filmable in roughly 4–8 seconds.
+Your job: produce a COMPLETE RepairPlan JSON that another team will use to generate a video. Every field is mandatory. Steps must be ordered, 2 to 7 of them, each filmable in roughly 4–8 seconds.
 
 For EACH step:
 - "title_fr": ≤6 words, English (legacy field name, content English).
@@ -90,36 +90,10 @@ For EACH step:
 - "motion_prompt": ≤1 English sentence describing what physically changes (the action), in the present tense ("you turn", "you slide"). The downstream video model will be additionally told to keep the camera and scene fixed — your motion prompt only needs to describe the action itself, NOT the framing.
 - "narration_fr": 50–80 words, English (legacy field name), second-person ("you"). Describe what the user does, with the precision the research context allows (e.g. mention specific torque, screw type, washer orientation). Pace must match duration_seconds.
 
-Per-step OPTIONAL enrichments (fill when adding value — every step should have at least subtitle_fr and success_criteria_fr):
-- "shot_type": e.g. "macro close-up", "medium shot, two hands", "top-down 45°".
-- "camera_movement": e.g. "static", "slow push-in", "subtle parallax", consistent with the scene_lock.camera_default.
-- "motion_pacing": "slow & deliberate" | "snappy" | "steady".
-- "subject_focus_fr": ≤10 English words, what the viewer should look at this step.
-- "subtitle_fr": ≤55 chars English caption to burn in. Active voice, no period at the end.
-- "safety_note_fr": ≤20 English words. Only when there is a real risk (pinch, mains, gas, glass).
-- "success_criteria_fr": ≤20 English words. How the user knows the step worked.
-- "common_mistake_fr": ≤20 English words. The single most common mistake at this step.
-
 Top-level:
 - "problem_summary_fr": ≤15 words, English. Restate the defect with its location precisely.
 - "difficulty": easy | medium | hard. Calibrate by the count and risk of disassembly + tool requirements.
 - "total_duration_min": integer minutes, sum of step durations rounded up.
-
-Top-level OPTIONAL enrichments (fill whenever you can — they make the UI richer):
-- "estimated_cost_eur": { parts_low, parts_high } — integers in euros. Be honest about the spread (€2–€8 is fine for a patch kit).
-- "safety_pre_check_fr": 1–4 short English bullets shown before step 1 (e.g. "Wear gloves", "Switch off mains").
-- "parts_summary": consolidated unique parts across all steps. Each: { name, quantity, specification_fr }. specification_fr is the dimension / standard that matters for ordering (e.g. "26x1.95 inner tube, Schrader valve").
-- "tools_summary": consolidated unique tools across all steps. Each: { name, required (true/false), specification_fr }. Mark "required: false" for nice-to-have items.
-- "scene_lock": a SHARED visual continuity bundle used by EVERY step. Helps the video model keep the scene consistent across cuts.
-    * subject: one short English phrase identifying the object as seen in the photo (use the input identification).
-    * environment: where the action happens ("indoors, neutral floor", "kitchen sink, well lit").
-    * hands_style: "bare adult hands, clean nails" by default; adjust if relevant.
-    * style: "clean instructional documentary, soft natural light, real materials, no text overlay".
-    * color_palette_fr: dominant colors of the subject in English (e.g. "white and blue frame, black tires, gravel floor").
-    * shot_default: the default framing repeated across steps (e.g. "medium close-up, 35mm equivalent").
-    * camera_default: default movement (usually "static" or "very slow push-in").
-    * consistency_phrases: 2–5 short English phrases that MUST appear in every visual_prompt_start/end to lock identity (e.g. ["Decathlon Rockrider 26" mountain bike", "blue and white frame", "rear wheel on gravel"]).
-    * negative_cues: 2–5 short English phrases to avoid (e.g. ["text overlay", "different bike model", "indoor studio backdrop"]).
 
 Grounding rules:
 - Prefer the research context for procedure, parts, and tools. Fall back on general repair knowledge only when context is thin.
@@ -130,6 +104,99 @@ Grounding rules:
 Strict output:
 - JSON matches the RepairPlan schema. No extra fields.
 - All text content in ENGLISH regardless of field name.`;
+
+/**
+ * Bike-specific synthesis prompt.
+ *
+ * Tuned for the downstream stack:
+ *   - gpt-image-2/edit  → renders the start and end keyframes from a reference photo
+ *   - Seedance 2.0 fast → animates between the two keyframes (image-to-video)
+ *
+ * Seedance 2.0 official prompt formula (ByteDance):
+ *     [Subject], [Action], in [Environment], camera [Camera Movement], style [Style], avoid [Constraints]
+ *     ~ 60–100 words for free text-to-video, but for image-to-video Seedance does NOT
+ *     need the subject re-described — the start image already carries identity.
+ *     For motion prompts we therefore stay short (≤25 words) and focus on motion +
+ *     one camera instruction + lighting hint.
+ *
+ * Camera vocabulary Seedance 2.0 understands well:
+ *   push-in, pull-out, pan, tracking, orbit, aerial, handheld, fixed.
+ *   Use pacing words: "slow", "gentle", "smooth", "stable" — never "fast" alone.
+ *
+ * Image-pair continuity rule (for gpt-image-2):
+ *   start and end MUST share the exact same composition, framing, distance,
+ *   lens, lighting, identity. Only the action state differs.
+ */
+const BIKE_SYSTEM_PROMPT = `You are a repair-procedure synthesizer SPECIALISED in bicycles. You receive a structured product identification, a structured visible problem, optional clarification answers, and raw research context (spec sheets + repair guides).
+
+Your job: produce a COMPLETE RepairPlan JSON for a bike repair video. Steps must be ordered, 2 to 7 of them, each filmable in 4–8 seconds.
+
+DOWNSTREAM PIPELINE — your prompts feed two models, write them accordingly:
+
+  • visual_prompt_start / visual_prompt_end → gpt-image-2/edit, with the original bike photo as reference.
+    GOAL: render two keyframes that LOOK like the same continuous shot, where only the action state differs (hand position, tool position, tire on / off the rim, etc.).
+    HARD RULES (the gpt-image-2 model drifts if any of these are violated):
+      - Both prompts are ≤25 English words.
+      - Use IDENTICAL framing language in start and end. If start says "close-up, top-down, rear wheel on gravel", end must say the same — only the action state varies.
+      - Name the EXACT bike from the input (brand + model line + frame color, e.g. "Decathlon Rockrider 26\\" blue/white mountain bike").
+      - Mention hands position, tools in frame, the sub-component acted upon.
+      - Never introduce a new object between start and end. Tools or hands present in start MUST also be in end (they may have moved).
+      - Mention the action's STATE (start: "tire bead seated on rim"; end: "tire bead lifted off rim by lever") rather than the action itself.
+
+  • motion_prompt → Seedance 2.0 fast image-to-video (start_image + end_image mode).
+    GOAL: bridge the two keyframes with believable mechanical motion.
+    HARD RULES:
+      - Seedance already SEES both images. Do NOT redescribe the bike, the hands, the environment, or what's in either keyframe.
+      - One sentence, ≤20 English words.
+      - Lead with the action verb in present tense ("you lift", "you slide", "you press").
+      - Include ONE camera instruction from this list: fixed, slow push-in, gentle pan, slow tilt up, handheld slight shake. Default to "fixed camera" for mechanical close-ups.
+      - Add a pacing word: "slow & deliberate", "steady", "smooth" — never "fast".
+      - Add a lighting hint when relevant ("soft natural daylight").
+      - End with a negative cue if helpful: "no identity change, no extra objects".
+
+For EACH step:
+- "title_fr": ≤6 words, English. Describe the action ("Remove the rear wheel", "Pry the tire bead").
+- "description_fr": 1–2 short English sentences. Mention the specific sub-component.
+- "parts_needed": list, each ≤3 words. Specific when possible ("26x1.95 inner tube", "Presta valve cap").
+- "tools_needed": list, each ≤3 words ("Tire lever ×2", "Floor pump").
+- "duration_seconds": integer 30–600, realistic.
+- "visual_prompt_start" / "visual_prompt_end" / "motion_prompt": per the rules above.
+- "narration_fr": 50–80 English words, second-person ("you"). Bike-savvy precision (e.g. "deflate fully", "seat the bead by hand all the way around", "inflate to 3 bar / 45 psi").
+
+Top-level:
+- "problem_summary_fr": ≤15 English words. Use the confirmed bike model and the precise defect location.
+- "difficulty": easy | medium | hard. A flat tire is easy; a hub bearing swap is hard.
+- "total_duration_min": integer minutes, sum of step durations rounded up.
+
+Bike-domain grounding:
+- ALWAYS use the confirmed tire size, valve type, and brake type from the clarification answers — they go into parts_needed, narration, and visual prompts.
+- Default to common-sense tools when the research context is thin: tire levers (×2), patch kit OR spare tube, floor pump, 15mm wrench for axle nuts (if not quick-release), allen key set.
+- Safety mentions: pinch flats from incorrect tube installation, over-inflation risk, brake-pad alignment after wheel removal — fold these into narration_fr only when relevant to the step.
+
+Strict output:
+- JSON matches the RepairPlan schema. No extra fields.
+- All text content in ENGLISH regardless of field name (e.g. narration_fr field still gets English content).`;
+
+/**
+ * Choose the synthesis system prompt based on the identified object family.
+ *
+ * Today: bike-specialised prompt for any bicycle-class object, generic
+ * prompt for everything else. Other devs plug their domain in here.
+ */
+function pickSystemPrompt(object: string, category: string): string {
+  const o = object.toLowerCase();
+  const isBike =
+    category === 'vehicle' &&
+    (o.includes('bike') ||
+      o.includes('bicycle') ||
+      o.includes('vélo') ||
+      o.includes('velo') ||
+      o.includes('rockrider') ||
+      o.includes('mountain bike') ||
+      o.includes('road bike'));
+  if (isBike) return BIKE_SYSTEM_PROMPT;
+  return SYSTEM_PROMPT;
+}
 
 function buildModelIdQuery(object: string, answersJson: string | null): string {
   const base = `Identify exact product model and compatible spare parts: ${object}`;
@@ -269,11 +336,17 @@ export async function POST(req: Request) {
 
   const researchContext = sections.join('\n\n').slice(0, MAX_CONTEXT_BYTES);
 
+  // Specialised prompt routing — pick the most relevant synthesis prompt
+  // based on the identified object family. Other devs add their domain
+  // specialisations here (phones, plumbing, …); fall back to the generic
+  // prompt for everything not yet specialised.
+  const systemPrompt = pickSystemPrompt(analyze.object, analyze.category);
+
   try {
     const result = await generateObject({
       model: reasoningModel(),
       schema: RepairPlan,
-      system: SYSTEM_PROMPT,
+      system: systemPrompt,
       messages: [
         {
           role: 'user',
