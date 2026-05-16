@@ -1,12 +1,13 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useCallback, useRef } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import type { DemoMeta } from '@/lib/demos';
 
 export function DemoCard({ demo }: { demo: DemoMeta }) {
   const router = useRouter();
   const preloaded = useRef(false);
+  const [imageFailed, setImageFailed] = useState(false);
 
   const preload = useCallback(() => {
     if (preloaded.current) return;
@@ -28,10 +29,25 @@ export function DemoCard({ demo }: { demo: DemoMeta }) {
       className="group flex flex-col overflow-hidden rounded-xl border border-[color:var(--color-border)] bg-white text-left transition hover:-translate-y-0.5 hover:border-[color:var(--color-border-strong)] hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--color-accent)]"
     >
       <div className="relative flex aspect-[3/2] w-full items-center justify-center overflow-hidden bg-[color:var(--color-surface)]">
-        <div className="absolute inset-0 bg-gradient-to-br from-white via-[color:var(--color-surface)] to-[color:var(--color-border)]/40" />
-        <span aria-hidden className="relative text-6xl opacity-80 transition group-hover:scale-105">
-          {demo.emoji}
-        </span>
+        {imageFailed ? (
+          <>
+            <div className="absolute inset-0 bg-gradient-to-br from-white via-[color:var(--color-surface)] to-[color:var(--color-border)]/40" />
+            <span
+              aria-hidden
+              className="relative text-6xl opacity-80 transition group-hover:scale-105"
+            >
+              {demo.emoji}
+            </span>
+          </>
+        ) : (
+          // biome-ignore lint/performance/noImgElement: native img + onError fallback
+          <img
+            src={demo.photo_url}
+            alt={demo.short}
+            onError={() => setImageFailed(true)}
+            className="h-full w-full object-cover transition group-hover:scale-105"
+          />
+        )}
       </div>
       <div className="flex flex-1 flex-col gap-1.5 px-4 py-3">
         <span className="text-xs font-semibold uppercase tracking-wider text-[color:var(--color-accent)]">
