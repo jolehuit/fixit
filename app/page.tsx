@@ -1,62 +1,62 @@
-/**
- * Landing page.
- * Owner: Role A
- *
- * Minimalist, mobile-first. Three demo cards + the live-mode entry.
- * The card components are real (no design system yet) but everything
- * downstream (PhotoUpload, VoiceRecorder, TerminalStream, VideoPlayer) is
- * a stub for Role A to flesh out.
- */
-
-import Link from 'next/link';
 import { DemoCard } from '@/components/DemoCard';
 import { demoList } from '@/lib/demos';
 
 export default function HomePage() {
   return (
-    <main className="mx-auto flex min-h-screen max-w-3xl flex-col gap-12 px-6 py-12 sm:py-16">
-      <header className="flex flex-col gap-3">
-        <p className="text-xs uppercase tracking-widest text-[color:var(--color-muted)]">
-          Fixit · AI hackathon
-        </p>
-        <h1 className="text-3xl font-semibold leading-tight sm:text-4xl">
-          Photo + voix → vidéo de réparation en 90 secondes.
-        </h1>
-        <p className="text-[color:var(--color-muted)] sm:text-lg">
-          Vous avez un objet cassé. Vous le montrez, vous dites le problème. L’IA vous renvoie une
-          vidéo personnalisée, voix française, sous-titrée.
-        </p>
+    <div className="min-h-screen bg-white">
+      <header className="border-b border-[color:var(--color-border)]">
+        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
+          <div className="flex items-center gap-2">
+            <span className="text-lg font-semibold tracking-tight text-[color:var(--color-fg)]">
+              fixit
+            </span>
+            <span className="text-xs uppercase tracking-widest text-[color:var(--color-subtle)]">
+              beta
+            </span>
+          </div>
+          <nav className="hidden gap-6 text-sm text-[color:var(--color-muted)] sm:flex">
+            <span>Guides</span>
+            <span>How it works</span>
+            <span>About</span>
+          </nav>
+        </div>
       </header>
 
-      <section className="flex flex-col gap-4">
-        <h2 className="text-sm uppercase tracking-widest text-[color:var(--color-muted)]">
-          3 exemples préparés
-        </h2>
-        <div className="grid gap-4 sm:grid-cols-3">
-          {demoList.map((demo) => (
-            <DemoCard key={demo.id} demo={demo} />
-          ))}
+      <main className="mx-auto max-w-6xl px-6 py-16 sm:py-24">
+        <section className="flex max-w-3xl flex-col gap-5">
+          <span className="text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--color-accent)]">
+            AI repair assistant
+          </span>
+          <h1 className="text-balance text-4xl font-bold leading-[1.05] text-[color:var(--color-fg)] sm:text-6xl">
+            Get a personalized repair video in 90 seconds.
+          </h1>
+          <p className="max-w-xl text-lg text-[color:var(--color-muted)]">
+            Show us what's broken. Our AI watches your photo, asks a couple of clarifying questions,
+            then walks you through the fix step by step.
+          </p>
+        </section>
+
+        <section className="mt-16 sm:mt-20">
+          <div className="mb-6 flex items-end justify-between gap-4">
+            <h2 className="text-xl font-semibold text-[color:var(--color-fg)]">
+              Try a sample repair
+            </h2>
+            <span className="text-sm text-[color:var(--color-muted)]">3 guided demos</span>
+          </div>
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {demoList.map((demo) => (
+              <DemoCard key={demo.id} demo={demo} />
+            ))}
+          </div>
+        </section>
+      </main>
+
+      <footer className="border-t border-[color:var(--color-border)] bg-[color:var(--color-surface)]">
+        <div className="mx-auto flex max-w-6xl flex-col gap-2 px-6 py-8 text-sm text-[color:var(--color-muted)] sm:flex-row sm:items-center sm:justify-between">
+          <span>© Fixit · AI hackathon</span>
+          <span>Inspired by the spirit of iFixit — repair is freedom.</span>
         </div>
-      </section>
-
-      <section className="flex flex-col gap-3 rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-card)] p-6">
-        <h2 className="text-lg font-medium">Ou : votre propre situation</h2>
-        <p className="text-sm text-[color:var(--color-muted)]">
-          Le bouton ci-dessous lance le pipeline réel (GPT-5.5 + fal + Tavily + Gradium). Les 3
-          exemples ci-dessus, eux, sont pré-générés.
-        </p>
-        <Link
-          href="/live"
-          className="mt-2 inline-flex w-fit items-center gap-2 rounded-lg bg-[color:var(--color-accent)] px-4 py-2 text-sm font-medium text-black transition hover:opacity-90"
-        >
-          Essayer avec votre situation →
-        </Link>
-      </section>
-
-      <footer className="mt-auto pt-8 text-xs text-[color:var(--color-muted)]">
-        Stack : Next.js 16 · React 19 · AI SDK 5 · GPT-5.5 · fal.ai · Tavily · Gradium · Vercel
-        Fluid Compute.
       </footer>
-    </main>
+    </div>
   );
 }
