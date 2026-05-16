@@ -20,9 +20,6 @@ Snap the broken thing. The orchestrator decides what's broken, asks one or two c
 ```mermaid
 flowchart TD
     User([Photo]) --> Run[/api/run/]
-    Run --> Classify[classify-photo<br/>OpenAI]
-    Classify -->|cache hit| Cached[Cached MP4]
-    Classify -->|miss| Analyze
 
     subgraph Live[Live pipeline]
         direction TB
@@ -32,9 +29,9 @@ flowchart TD
         Step --> Stitch[stitch<br/>ffmpeg]
     end
 
+    Run --> Analyze
     Stitch --> Blob[(Vercel Blob)]
-    Cached --> Video([Video URL])
-    Blob --> Video
+    Blob --> Video([Video URL])
 
     Live -.->|SSE| Stream[stream/jobId]
     Stream -.-> User
