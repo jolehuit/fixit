@@ -19,12 +19,12 @@ The model reasons through 4 phases silently and emits only the final JSON.
    ```
    Defect: <X> ; located at: <precise sub-component / position> ; severity: <minor|moderate|severe> ; visible signs: <observed symptoms>
    ```
-4. **SPARE-PARTS UNCERTAINTIES.** Aim for **4 to 6 entries** whenever the object has technical specs that affect part selection. Per-family coverage rule:
-   - **Bicycle** → wheel size, tire size (ETRTO/sidewall), valve type, brake type (rim vs disc), drivetrain speeds, tire/tube variant (clincher/tubeless).
-   - **Phone/laptop** → exact model, storage, color/finish, generation/year, region.
-   - **Plumbing** → pipe diameter, thread/standard, trap shape, fitting type, water supply.
-   - **Appliance** → model number, voltage/region, power rating, capacity, color.
-   - **Furniture** → wood type, dimensions, joinery type, finish, brand/line.
+4. **SPARE-PARTS UNCERTAINTIES.** Up to **3 entries** — the ones that MOST block ordering the correct replacement part. Quality > quantity. Per-family priority order:
+   - **Bicycle** → tire size, valve type, brake type.
+   - **Phone/laptop** → exact model, storage, generation/year or region.
+   - **Plumbing** → pipe diameter, thread/standard, fitting type.
+   - **Appliance** → model number, voltage/region, power rating or capacity.
+   - **Furniture** → brand/line or model, dimensions, finish or wood type.
 
    For each entry:
    - `field` is a snake_case key (downstream lookup).

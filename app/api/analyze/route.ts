@@ -58,14 +58,14 @@ Example:
 "Defect: active water leak ; located at: the upper slip-joint nut between the sink strainer outlet and the trap inlet (top of the assembly, ~3cm below the sink basin) ; severity: moderate (steady visible drip into the cabinet floor) ; visible signs: vertical water trail along the white trap body, glistening film around the upper slip nut, towel below partially saturated"
 
 PHASE 4 — SPARE-PARTS UNCERTAINTIES:
-Return between 4 and 6 uncertainties when the object has any technical specs that affect part selection. Aim for thorough technical disambiguation, not just minimum viable.
+Return up to 3 uncertainties — the ones that MOST block ordering the correct replacement part. Quality > quantity. If the photo + transcript already disambiguate the part, return fewer (or empty).
 
-Coverage rule per object family — try to fill ALL of these dimensions when applicable:
-- Bicycle → wheel size, tire size (ETRTO or sidewall code), valve type, brake type (rim/disc), drivetrain speeds, tube/tire variant (clincher/tubeless), frame size if relevant
-- Phone/laptop → exact model, storage, color/finish, generation/year, region, battery health if guessable
-- Plumbing → pipe diameter, thread/standard (BSP/NPT/metric), trap shape, fitting type, water-supply type
-- Appliance → model number, voltage/region, power rating, capacity, color/finish
-- Furniture → wood type, dimensions, joinery type, finish, brand/line
+Priority rule per object family — pick the top blockers from this list:
+- Bicycle → 1) tire size (ETRTO or sidewall code), 2) valve type, 3) brake type (rim/disc). Skip drivetrain/frame unless directly relevant to the defect.
+- Phone/laptop → 1) exact model, 2) storage, 3) generation/year or region.
+- Plumbing → 1) pipe diameter, 2) thread/standard, 3) fitting type.
+- Appliance → 1) model number, 2) voltage/region, 3) power rating or capacity.
+- Furniture → 1) brand/line or model, 2) dimensions, 3) finish or wood type.
 
 For EACH uncertainty, populate THESE fields (all text in English, the "_fr" suffix is legacy):
 - "field": snake_case key downstream steps use to look up the answer (e.g. "tire_size_etrto", "valve_type").
@@ -95,7 +95,7 @@ Examples of useful uncertainty fields (use what fits the object, do not force al
 - storage_capacity, color_or_finish
 - visible_serial_number, label_code
 
-Quality > quantity, but err on the side of MORE thoroughness for repair domains where small spec mismatches break the fix (bikes especially). Empty array only when there is genuinely nothing left to disambiguate.
+Do NOT invent uncertainties to look thorough. Empty array if the photo + transcript already determine the part.
 
 OTHER REQUIRED FIELDS:
 - "category" must be exactly one of: vehicle, electronics, plumbing, furniture, other.
