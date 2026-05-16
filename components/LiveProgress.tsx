@@ -146,6 +146,7 @@ export function LiveProgress({
   onPlan,
   onVideoReady,
   onChaptersReady,
+  onPhotoReady,
 }: {
   jobId: string;
   /** Receives the AnalyzeResult as soon as it arrives (used by the parent to draw the marker). */
@@ -156,6 +157,8 @@ export function LiveProgress({
   onVideoReady?: (url: string) => void;
   /** Live path: per-step interactive chapter player input. */
   onChaptersReady?: (chapters: Chapter[]) => void;
+  /** Cached demo path: Blob URL of the reference photo (preferred over local fallback). */
+  onPhotoReady?: (url: string) => void;
 }) {
   const [state, dispatch] = useReducer(reducer, undefined, initialState);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -167,6 +170,8 @@ export function LiveProgress({
   onVideoReadyRef.current = onVideoReady;
   const onChaptersReadyRef = useRef(onChaptersReady);
   onChaptersReadyRef.current = onChaptersReady;
+  const onPhotoReadyRef = useRef(onPhotoReady);
+  onPhotoReadyRef.current = onPhotoReady;
   // Guard so we only fire onChaptersReady once per job (when all clips are in).
   const chaptersFiredRef = useRef(false);
 
@@ -181,6 +186,7 @@ export function LiveProgress({
         return;
       }
       dispatch({ type: 'event', ev });
+      if (ev.type === 'photo_ready') onPhotoReadyRef.current?.(ev.url);
       if (ev.type === 'analyze_done') onAnalyzeRef.current?.(ev.result);
       if (ev.type === 'plan_done') onPlanRef.current?.(ev.result);
       if (ev.type === 'stitch_done') onVideoReadyRef.current?.(ev.video_url);

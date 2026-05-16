@@ -370,6 +370,10 @@ export const StreamEvent = z.discriminatedUnion('type', [
     severity: z.enum(['info', 'warn', 'error']).optional(),
     transient: z.boolean().optional(),
   }),
+  // Cached demo path: the orchestrator emits the Blob photo URL from the
+  // manifest so the frontend can render the cached reference image (the
+  // static /public/demos/... copy is only used in local dev).
+  z.object({ type: z.literal('photo_ready'), url: z.string().url() }),
   // pipeline milestones
   z.object({ type: z.literal('analyze_done'), result: AnalyzeResult }),
   z.object({ type: z.literal('clarify_needed'), uncertainties: z.array(Uncertainty) }),

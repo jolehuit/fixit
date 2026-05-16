@@ -26,15 +26,24 @@ function JobInner({ jobId }: { jobId: string }) {
   const [plan, setPlan] = useState<RepairPlan | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [analyzeMarker, setAnalyzeMarker] = useState<DefectMarker | null>(null);
+  // Cached demo path: Blob URL of the reference photo, pushed by the
+  // orchestrator via the `photo_ready` SSE event (manifest.photo_url).
+  const [cachedPhotoUrl, setCachedPhotoUrl] = useState<string | null>(null);
 
   const onAnalyze = (a: AnalyzeResult) => {
     if (a.defect_marker) setAnalyzeMarker(a.defect_marker);
   };
 
-  // The photo is stored server-side at job creation. We just point <img> at
-  // the streaming endpoint — no client-side storage quota to worry about.
-  // Demo fallback only kicks in if the server can't serve the photo.
-  const imgSrc = imageFailed ? (demo?.photo_url ?? null) : `/api/jobs/${jobId}/photo`;
+  // Source priority for the photo:
+  //   1. cachedPhotoUrl  — Vercel Blob URL from the demo manifest (prod-safe)
+  //   2. /api/jobs/<id>/photo — in-memory data URL stashed by /api/run
+  //                              (works for free uploads; also fine in dev)
+  //   3. demo.photo_url  — local /public/demos/... copy (dev fallback only)
+  // `imageFailed` short-circuits the priority and falls straight to the demo
+  // path if anything in the chain 404s in the browser.
+  const imgSrc = imageFailed
+    ? (demo?.photo_url ?? null)
+    : (cachedPhotoUrl ?? `/api/jobs/${jobId}/photo`);
   // Marker appears as soon as analyze has located the defect — even if the
   // tutorial isn't generated yet (skip mode). Click is gated to chapters/video.
   const analyzeRan = Boolean(analyzeMarker) || Boolean(plan);
@@ -80,32 +89,17 @@ function JobInner({ jobId }: { jobId: string }) {
             {scanning ? (
               <div
                 aria-hidden
-                className="pointer-events-none absolute inset-0 overflow-hidden"
+                className="pointer-events-none absolute inset-0 overflow-hidden mix-blend-screen"
               >
-                <div
-                  className="absolute inset-0 animate-[scan-tint_2.4s_ease-in-out_infinite]"
-                  style={{
-                    background:
-                      'linear-gradient(to bottom, rgba(124,179,66,0) 0%, rgba(124,179,66,0.08) 50%, rgba(124,179,66,0) 100%)',
-                  }}
-                />
-                <div
-                  className="absolute inset-x-0 h-16 -translate-y-1/2 animate-[scan-ray_2.4s_ease-in-out_infinite]"
-                  style={{
-                    background:
-                      'linear-gradient(to bottom, rgba(124,179,66,0) 0%, rgba(124,179,66,0.55) 50%, rgba(124,179,66,0) 100%)',
-                    boxShadow:
-                      '0 0 24px 6px rgba(124,179,66,0.35), 0 0 64px 12px rgba(124,179,66,0.18)',
-                  }}
-                />
                 <div
                   className="absolute inset-x-0 h-px"
                   style={{
                     top: 0,
                     background:
-                      'linear-gradient(to right, rgba(124,179,66,0) 0%, rgba(124,179,66,0.9) 50%, rgba(124,179,66,0) 100%)',
+                      'linear-gradient(to right, rgba(124,179,66,0) 0%, rgba(124,179,66,0.95) 50%, rgba(124,179,66,0) 100%)',
                     animation: 'scan-ray 2.4s ease-in-out infinite',
-                    boxShadow: '0 0 10px 2px rgba(124,179,66,0.8)',
+                    boxShadow:
+                      '0 0 6px 1px rgba(124,179,66,0.7), 0 0 16px 3px rgba(124,179,66,0.35)',
                   }}
                 />
               </div>
@@ -183,6 +177,7 @@ function JobInner({ jobId }: { jobId: string }) {
             onPlan={setPlan}
             onVideoReady={setVideoUrl}
             onChaptersReady={setChapters}
+            onPhotoReady={setCachedPhotoUrl}
           />
         </section>
       </div>

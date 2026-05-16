@@ -376,25 +376,24 @@ async function runCached(jobId: string, demoId: DemoId) {
     const stepsById = new Map(manifest.steps.map((s) => [s.step_number, s]));
 
     // ── Timing budget (ms) ──
+    // Demo replay skips the clarify pause entirely (the manifest already
+    // bakes the resolved answers into `plan`). Total budget ≈ 45 s for 6 steps,
+    // 41 s for 5 steps — still paced like a live run, just compressed.
     const T_initLog = 0;
-    const T_initInfo = 500;
-    const T_analyzeStart = 1_000;
-    const T_analyzeDone = 12_000;
-    const T_objectLog = 12_500;
-    const T_clarifyNeeded = 13_500;
-    const T_clarifyWaitLog = 14_000;
-    const T_clarifyDone = 24_000;
-    const T_clarifyDoneLog = 24_500;
-    const T_planStart = 25_000;
-    const T_planDone = 55_000;
-    const T_planSummaryLog = 55_500;
-    const T_stepStart = 58_000;
-    const STEP_DURATION = 7_000; // per step total (kf_start + kf_end + anim + narr)
+    const T_initInfo = 300;
+    const T_analyzeStart = 600;
+    const T_analyzeDone = 5_500;
+    const T_objectLog = 5_800;
+    const T_planStart = 6_500;
+    const T_planDone = 16_500;
+    const T_planSummaryLog = 17_000;
+    const T_stepStart = 18_000;
+    const STEP_DURATION = 3_800; // per step total (kf_start + kf_end + anim + narr)
     const N = plan.steps.length;
     const T_stitchStartLog = T_stepStart + N * STEP_DURATION;
-    const T_stitchDone = T_stitchStartLog + 5_000;
-    const T_finalLog = T_stitchDone + 500;
-    const T_done = T_stitchDone + 700;
+    const T_stitchDone = T_stitchStartLog + 3_000;
+    const T_finalLog = T_stitchDone + 300;
+    const T_done = T_stitchDone + 500;
 
     const emitAt = (delay: number, eventFn: () => void) => {
       setTimeout(() => {
@@ -405,6 +404,10 @@ async function runCached(jobId: string, demoId: DemoId) {
         }
       }, delay);
     };
+
+    // Push the cached photo URL first so the frontend can swap to the Blob
+    // image immediately (the static /public/demos/... copy is dev-only).
+    emit(jobId, { type: 'photo_ready', url: manifest.photo_url });
 
     emitAt(T_initLog, () => emit(jobId, { type: 'log', message: '> Fixit — diagnosis started…' }));
     emitAt(T_initInfo, () =>
@@ -425,21 +428,7 @@ async function runCached(jobId: string, demoId: DemoId) {
       emit(jobId, { type: 'log', message: `✓ Object identified: ${analyze.object.slice(0, 100)}` }),
     );
 
-    if (analyze.uncertainties.length > 0) {
-      emitAt(T_clarifyNeeded, () =>
-        emit(jobId, { type: 'clarify_needed', uncertainties: analyze.uncertainties }),
-      );
-      emitAt(T_clarifyWaitLog, () =>
-        emit(jobId, {
-          type: 'log',
-          message: `⠋ ${analyze.uncertainties.length} question(s) — waiting for your answers…`,
-          transient: true,
-        }),
-      );
-      emitAt(T_clarifyDone, () => emit(jobId, { type: 'clarify_done' }));
-      emitAt(T_clarifyDoneLog, () => emit(jobId, { type: 'log', message: '✓ Answers received' }));
-    }
-
+    // Cached demos skip clarify entirely — the manifest's plan is final.
     emitAt(T_planStart, () =>
       emit(jobId, {
         type: 'log',
@@ -475,7 +464,7 @@ async function runCached(jobId: string, demoId: DemoId) {
         );
       }
       if (endUrl) {
-        emitAt(base + 2_000, () =>
+        emitAt(base + 1_200, () =>
           emit(jobId, {
             type: 'keyframe_done',
             step: step.step_number,
@@ -485,14 +474,14 @@ async function runCached(jobId: string, demoId: DemoId) {
         );
       }
       if (cached) {
-        emitAt(base + 4_500, () =>
+        emitAt(base + 2_400, () =>
           emit(jobId, {
             type: 'animation_done',
             step: step.step_number,
             url: cached.video_url,
           }),
         );
-        emitAt(base + 5_500, () =>
+        emitAt(base + 3_200, () =>
           emit(jobId, {
             type: 'narration_done',
             step: step.step_number,
