@@ -17,7 +17,7 @@
  *   - The intermediate file lives on tmpfs and is deleted in finally{}.
  *
  * Critical Vercel config (vercel.json):
- *   - memory: 3009, maxDuration: 800
+ *   - memory: 3009, maxDuration: 300
  * Critical Next.js config (next.config.ts):
  *   - outputFileTracingIncludes pins the ffmpeg-static binary into the bundle.
  */
@@ -32,7 +32,7 @@ import { blobKey, upload } from '@/lib/blob';
 import { FinalVideo, StitchRequest } from '@/lib/types';
 
 export const runtime = 'nodejs';
-export const maxDuration = 800;
+export const maxDuration = 300;
 
 // ---------- helpers ----------
 

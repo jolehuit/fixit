@@ -71,7 +71,7 @@ function logRepairPlan(jobId: string, plan: RepairPlan): void {
 }
 
 export const runtime = 'nodejs';
-export const maxDuration = 800;
+export const maxDuration = 300;
 
 // Base URL for internal fetch calls (Vercel sets VERCEL_URL automatically).
 const BASE_URL = process.env.VERCEL_URL

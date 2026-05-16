@@ -4,11 +4,11 @@
   "functions": {
     "app/api/stitch/route.ts": {
       "memory": 3009,
-      "maxDuration": 800
+      "maxDuration": 300
     },
     "app/api/run/route.ts": {
       "memory": 2048,
-      "maxDuration": 800
+      "maxDuration": 300
     },
     "app/api/animate-step/route.ts": {
       "maxDuration": 300
@@ -29,7 +29,7 @@
       "maxDuration": 30
     },
     "app/api/stream/[jobId]/route.ts": {
-      "maxDuration": 800
+      "maxDuration": 300
     }
   }
 }
