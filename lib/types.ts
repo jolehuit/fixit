@@ -81,7 +81,7 @@ export const RepairPlan = z.object({
   problem_summary_fr: z.string(),
   difficulty: Difficulty,
   total_duration_min: z.number().positive(),
-  steps: z.array(RepairStep).min(2).max(8),
+  steps: z.array(RepairStep).min(2).max(10),
 });
 export type RepairPlan = z.infer<typeof RepairPlan>;
 

@@ -1,33 +1,44 @@
-# /api/clarify — system + user prompts (first draft)
+# /api/clarify — system + user prompts
 
 **Owner:** Role B
-**Model:** `gpt-5.5`
+**Model:** `gpt-5.5` text-only (no vision; the slotted strings from `/api/analyze` carry all needed context).
+**Output language:** ENGLISH in `_fr` fields (legacy naming; content decoupled).
 
-## Mode A — generate visual options
+## Purpose of this route
 
-When the request has no `answers`, expand each uncertainty into a UI-
-ready question. The frontend renders 1–3 button-options + a free-text
-fallback.
+`/api/analyze` produces uncertainties that genuinely block ordering the correct spare parts. `/api/clarify` polishes those uncertainties into **UI-ready** form:
+
+- A short, direct user-facing question.
+- A purpose clause that explains, in one line, **what the answer unlocks downstream** (so the UI can show "why we ask" inline and so the user knows their input is meaningful).
+- Either ≤3 enumerable options (the UI renders buttons) **or** no options (the UI renders a free-text input).
+
+Mode B: if the request already carries `answers`, the route just returns `{ resolved: true }` — no LLM call. The orchestrator (Role D) feeds those answers into `/api/plan`.
+
+## Short-circuit
+
+If `analyze.uncertainties.length === 0`, the route returns `{ uncertainties: [] }` without calling the model. Saves a round-trip when the photo + transcript already determine the part.
+
+## System prompt (canonical — embedded as a constant in `app/api/clarify/route.ts`)
+
+Enforces per uncertainty:
+- `field` UNCHANGED (downstream lookup key).
+- `question_fr` formatted strictly as `"<short direct English question> (— used to <one-line purpose>)"`. If a purpose clause exists, refine it; if missing, infer it from the field name and the object/problem context.
+- `options` only when ≤3 candidates are realistically enumerable from the input context.
+- Tone: direct, no politeness; ≤8 words before the purpose clause; answerable in <5 seconds by a non-expert.
+- Same number of uncertainties as input — never add, never drop. May reorder so the most-blocking question is first.
+
+## User prompt template
 
 ```
-System: Tu reçois une liste d'incertitudes sur un objet à réparer.
-Pour chaque incertitude, propose une question courte en FR et jusqu'à
-3 options concises (3 mots max chacune). Si une URL d'image est
-disponible pour illustrer une option, inclus-la sous le champ
-"image_url" — sinon laisse vide.
+Object: {analyze.object}                          # slotted string from analyze
+Visible problem: {analyze.problem_visual}         # slotted string from analyze
+Input uncertainties (JSON): {analyze.uncertainties}
 
-Output schema: ClarifyOptions (lib/types.ts).
+Polish each uncertainty per the system rules and return ClarifyOptions JSON.
 ```
-
-## Mode B — resolved
-
-When the request includes `answers`, the route returns `{ resolved: true }`
-without calling the model — the answers are fed into the plan step
-downstream.
 
 ## Notes for Role B
 
-- Keep options ≤ 3. Beyond that the UI becomes a model picker.
-- Phrasing must be direct: "Quel modèle ?", not "Pourriez-vous nous
-  préciser …".
-- If the uncertainty is binary, return options like ["oui", "non"].
+- Clarify is also where ambiguity in the analyze output is sharpened. If analyze emitted a vague "(— used to identify the part)" purpose, clarify will rewrite it specifically: e.g. "(— used to pick the correct iPhone XR vs 11 display assembly P/N)".
+- The route does not validate against analyze.uncertainties strictly — Zod only checks shape. Drift is caught by the contract test we run via `scripts/test-clarify.sh`.
+- Field name `question_fr` stores English content. Same legacy-naming convention as the rest of the project.
