@@ -75,22 +75,19 @@ export async function POST(req: Request) {
     );
   }
 
-  const { step_number, text_fr, voice_id, job_id } = parsed.data;
+  const { step_number, text, voice_id, job_id } = parsed.data;
 
   // 1. Synthesize via Gradium (single retry on transient errors).
   let buf: Buffer;
   try {
     try {
-      buf = await synthesize({ text: text_fr, voice_id, output_format: 'wav' });
+      buf = await synthesize({ text: text, voice_id, output_format: 'wav' });
     } catch (err) {
       if (!isTransientTtsError(err)) throw err;
-      buf = await synthesize({ text: text_fr, voice_id, output_format: 'wav' });
+      buf = await synthesize({ text: text, voice_id, output_format: 'wav' });
     }
   } catch (err) {
-    return NextResponse.json(
-      { error: 'tts_failed', detail: String(err) },
-      { status: 502 },
-    );
+    return NextResponse.json({ error: 'tts_failed', detail: String(err) }, { status: 502 });
   }
 
   // 2. Upload WAV bytes to Vercel Blob.
@@ -103,14 +100,11 @@ export async function POST(req: Request) {
       contentType: 'audio/wav',
     });
   } catch (err) {
-    return NextResponse.json(
-      { error: 'blob_upload_failed', detail: String(err) },
-      { status: 502 },
-    );
+    return NextResponse.json({ error: 'blob_upload_failed', detail: String(err) }, { status: 502 });
   }
 
   // 3. Compute duration from WAV header (with heuristic fallback).
-  const duration_seconds = wavDurationSeconds(buf, text_fr);
+  const duration_seconds = wavDurationSeconds(buf, text);
 
   // 4. Return strictly-validated NarrationAudio.
   const result = NarrationAudio.parse({

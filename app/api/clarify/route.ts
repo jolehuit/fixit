@@ -7,7 +7,7 @@
  *    via gpt-5.5 (text-only; vision context already lives in analyze.problem_visual).
  *  - Answers present → mark clarification resolved, no model call.
  *
- * Output language: English content in all `_fr` fields (legacy schema naming).
+ * Output language: English content in all `` fields (legacy schema naming).
  */
 
 import { generateObject } from 'ai';
@@ -27,7 +27,7 @@ Inputs you receive (in the user message):
 
 For EACH uncertainty:
 - Keep "field" UNCHANGED (downstream lookup key).
-- Rewrite "question_fr" with this exact format:
+- Rewrite "question" with this exact format:
     "<short direct English question> (— used to <one-line purpose>)"
   Examples:
     "Which exact iPhone model? (— used to pick the correct display assembly P/N)"
@@ -43,7 +43,7 @@ Polishing rules:
 
 Strict output:
 - Return JSON matching the ClarifyOptions schema.
-- All text content in ENGLISH (the legacy "_fr" field name is decoupled from content language).
+- All text content in ENGLISH (the legacy "" field name is decoupled from content language).
 - Same number of uncertainties as input. Do not add, do not drop, do not reorder unless reordering puts the most-blocking question first.`;
 
 const userPrompt = (object: string, problemVisual: string, uncertaintiesJson: string): string =>

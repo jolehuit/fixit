@@ -64,18 +64,18 @@ For EACH uncertainty, populate the following fields:
 
 - "field" : snake_case key downstream steps will use to look up the answer.
 
-- "question_fr" : PURE user-facing question, ≤8 words English. No parenthetical, no purpose embedded.
+- "question" : PURE user-facing question, ≤8 words English. No parenthetical, no purpose embedded.
   Examples:
     "Which exact iPhone model?"
     "What is the trap diameter?"
     "What tire size is on the sidewall?"
 
-- "purpose_fr" (optional, recommended) : ≤12 words English explaining WHY we ask. Shown as a tooltip / subtitle.
+- "purpose" (optional, recommended) : ≤12 words English explaining WHY we ask. Shown as a tooltip / subtitle.
   Examples:
     "Used to pick the correct display assembly P/N"
     "Used to size the replacement slip washer and nut"
 
-- "instruction_fr" (optional, recommended for physical-inspection answers) : ≤20 words English describing WHERE / HOW the user finds the answer in the real world. OMIT when the answer is obvious from photo or general knowledge (e.g. choosing a phone model from a list — user knows their phone).
+- "instruction" (optional, recommended for physical-inspection answers) : ≤20 words English describing WHERE / HOW the user finds the answer in the real world. OMIT when the answer is obvious from photo or general knowledge (e.g. choosing a phone model from a list — user knows their phone).
   Examples (populate):
     "Read the numbers on the tire sidewall — look for a code like 700x25c or 26x1.95."
     "Try to unlock the phone; if you see anything on screen AND touch responds, both work."
@@ -84,7 +84,7 @@ For EACH uncertainty, populate the following fields:
     "Which color?"  (visible in photo)
     "iPhone 11 / 12 / 13?"  (user knows their model from memory)
 
-- "placeholder_fr" (optional, for free-text inputs) : ≤6 words English example value, shown as the input placeholder.
+- "placeholder" (optional, for free-text inputs) : ≤6 words English example value, shown as the input placeholder.
   Examples:
     "e.g. 27.5x2.10"
     "e.g. McAlpine ST32M-WH"
@@ -110,12 +110,12 @@ PHASE 5 — SAFETY + FEASIBILITY METADATA (top-level):
     "home_advanced"  → requires some experience, specialised tools, careful work
     "professional"   → recommend professional intervention (gas, mains electrical, complex disassembly with calibration)
 
-- "estimated_skill_level_fr" : ≤10 words English describing the skill bar.
+- "estimated_skill_level" : ≤10 words English describing the skill bar.
   Examples:
     "Basic tool experience helpful, no special training needed"
     "Precise hand work and patience required; first iPhone repair tricky"
 
-- "safety_warnings_fr" : 0-4 warnings that the user MUST know before starting. ≤15 words each. Be specific to what the user sees in the photo, not generic.
+- "safety_warnings" : 0-4 warnings that the user MUST know before starting. ≤15 words each. Be specific to what the user sees in the photo, not generic.
   Examples:
     "Disconnect the battery before any disassembly"
     "Wear safety glasses — glass shards on cracked iPhone displays"
@@ -127,7 +127,7 @@ OTHER REQUIRED FIELDS:
 - "defect_marker" pinpoints where on the photo the defect is centered, as percentages of the image box (x=0 is left edge, x=100 is right edge; y=0 is top, y=100 is bottom). The "label" is a 2-4 word English summary of what the marker points at (e.g. "Cracked area", "Leak source", "Flat tire"). Estimate it as precisely as you can from the photo geometry — this drives a pulsing UI marker the user clicks to play the repair video.
 
 OUTPUT RULES:
-- All text fields in ENGLISH (the legacy "_fr"-suffixed names are kept by contract; content is English).
+- All text fields in ENGLISH (the legacy ""-suffixed names are kept by contract; content is English).
 - Strict JSON matching the AnalyzeResult schema. No extra top-level fields.
 - Never speculate. If something is unknowable, omit it from the slot or convert it to an uncertainty.`;
 
@@ -158,7 +158,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'env_missing', message }, { status: 500 });
   }
 
-  const { photo_url, transcript_fr } = parsed.data;
+  const { photo_url, transcript } = parsed.data;
 
   try {
     const result = await generateObject({
@@ -170,7 +170,7 @@ export async function POST(req: Request) {
           role: 'user',
           content: [
             { type: 'image', image: photo_url },
-            { type: 'text', text: userPrompt(transcript_fr) },
+            { type: 'text', text: userPrompt(transcript) },
           ],
         },
       ],

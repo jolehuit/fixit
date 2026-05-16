@@ -348,19 +348,19 @@ function IdentificationCard({ analyze }: { analyze: AnalyzeResult }) {
         {probSummary}
       </p>
 
-      {analyze.estimated_skill_level_fr ? (
+      {analyze.estimated_skill_level ? (
         <p className="text-xs italic text-[color:var(--color-muted)]">
-          Skill: {analyze.estimated_skill_level_fr}
+          Skill: {analyze.estimated_skill_level}
         </p>
       ) : null}
 
-      {analyze.safety_warnings_fr && analyze.safety_warnings_fr.length > 0 ? (
+      {analyze.safety_warnings && analyze.safety_warnings.length > 0 ? (
         <div className="mt-1 rounded-md border border-[color:var(--color-warn)]/40 bg-[color:var(--color-warn)]/5 px-3 py-2 text-xs">
           <p className="font-semibold uppercase tracking-wide text-[color:var(--color-warn)]">
             ⚠ Before you start
           </p>
           <ul className="mt-1 flex flex-col gap-0.5 text-[color:var(--color-fg)]">
-            {analyze.safety_warnings_fr.map((w) => (
+            {analyze.safety_warnings.map((w) => (
               <li key={w}>• {w}</li>
             ))}
           </ul>
@@ -470,7 +470,7 @@ function ClarifyCard({
 
       <ul className="flex flex-col gap-3">
         {uncertainties.map((u) => {
-          const { question, purpose } = splitQuestion(u.question_fr);
+          const { question, purpose } = splitQuestion(u.question);
           const current = answers[u.field] ?? '';
           return (
             <li key={u.field} className="flex flex-col gap-2">
@@ -555,15 +555,103 @@ function PlanCard({
   plan: RepairPlan;
   progress: Record<number, StepProgress>;
 }) {
+  const costLabel = plan.estimated_cost_eur
+    ? plan.estimated_cost_eur.parts_low === plan.estimated_cost_eur.parts_high
+      ? `${plan.estimated_cost_eur.parts_low}€`
+      : `${plan.estimated_cost_eur.parts_low}–${plan.estimated_cost_eur.parts_high}€`
+    : null;
+
   return (
     <section className="flex animate-[fade-in_220ms_ease-out] flex-col gap-3 rounded-lg border border-[color:var(--color-border)] bg-white p-4">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h3 className="text-sm font-semibold text-[color:var(--color-fg)]">Repair plan</h3>
         <span className="text-xs text-[color:var(--color-muted)]">
           {plan.steps.length} steps · {plan.difficulty} · ~{plan.total_duration_min} min
+          {costLabel ? ` · ${costLabel}` : ''}
         </span>
       </div>
-      <p className="text-sm text-[color:var(--color-fg)]">{plan.problem_summary_fr}</p>
+      <p className="text-sm text-[color:var(--color-fg)]">{plan.problem_summary}</p>
+
+      {plan.safety_pre_check && plan.safety_pre_check.length > 0 ? (
+        <div className="rounded-md border border-[color:var(--color-warn)]/40 bg-[color:var(--color-warn)]/5 px-3 py-2 text-xs">
+          <p className="font-semibold uppercase tracking-wide text-[color:var(--color-warn)]">
+            ⚠ Before you start
+          </p>
+          <ul className="mt-1 flex flex-col gap-0.5 text-[color:var(--color-fg)]">
+            {plan.safety_pre_check.map((w) => (
+              <li key={w}>• {w}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {(plan.parts_summary?.length ?? 0) + (plan.tools_summary?.length ?? 0) > 0 ? (
+        <details className="rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 py-2 text-xs">
+          <summary className="cursor-pointer font-semibold uppercase tracking-wide text-[color:var(--color-muted)]">
+            Parts & tools
+          </summary>
+          <div className="mt-2 flex flex-col gap-2">
+            {plan.parts_summary && plan.parts_summary.length > 0 ? (
+              <div>
+                <p className="text-[10px] font-semibold uppercase text-[color:var(--color-subtle)]">
+                  Parts
+                </p>
+                <ul className="mt-1 flex flex-col gap-1 text-[color:var(--color-fg)]">
+                  {plan.parts_summary.map((p) => (
+                    <li
+                      key={p.name}
+                      className="flex flex-wrap items-baseline justify-between gap-2"
+                    >
+                      <span className="flex-1">
+                        • {p.quantity}× {p.name}
+                        {p.specification ? (
+                          <span className="text-[color:var(--color-muted)]">
+                            {' '}
+                            — {p.specification}
+                          </span>
+                        ) : null}
+                      </span>
+                      {p.purchase_url ? (
+                        <a
+                          href={p.purchase_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex shrink-0 items-center gap-1 rounded-full border border-[color:var(--color-accent)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[color:var(--color-accent)] transition hover:bg-[color:var(--color-accent)] hover:text-white"
+                        >
+                          Buy
+                          <span aria-hidden>↗</span>
+                        </a>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+            {plan.tools_summary && plan.tools_summary.length > 0 ? (
+              <div>
+                <p className="text-[10px] font-semibold uppercase text-[color:var(--color-subtle)]">
+                  Tools
+                </p>
+                <ul className="mt-1 flex flex-col gap-0.5 text-[color:var(--color-fg)]">
+                  {plan.tools_summary.map((t) => (
+                    <li key={t.name}>
+                      • {t.name}
+                      {t.required ? '' : ' (optional)'}
+                      {t.specification ? (
+                        <span className="text-[color:var(--color-muted)]">
+                          {' '}
+                          — {t.specification}
+                        </span>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </div>
+        </details>
+      ) : null}
+
       <ol className="flex flex-col gap-2 text-sm">
         {plan.steps.map((s) => {
           const p = progress[s.step_number] ?? {};
@@ -571,28 +659,46 @@ function PlanCard({
           const animOk = Boolean(p.animationUrl);
           const narrOk = Boolean(p.narrationUrl);
           const allOk = keyframesOk && animOk && narrOk;
+          const hasCoaching = Boolean(s.safety_note || s.success_criteria || s.common_mistake);
           return (
             <li
               key={s.step_number}
-              className="flex items-center justify-between gap-3 rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 py-2"
+              className="flex flex-col gap-1.5 rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 py-2"
             >
-              <span className="flex items-center gap-2">
-                <span
-                  className={`inline-flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-semibold ${
-                    allOk
-                      ? 'bg-[color:var(--color-accent)] text-white'
-                      : 'bg-white text-[color:var(--color-muted)] ring-1 ring-[color:var(--color-border-strong)]'
-                  }`}
-                >
-                  {s.step_number}
+              <div className="flex items-center justify-between gap-3">
+                <span className="flex items-center gap-2">
+                  <span
+                    className={`inline-flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-semibold ${
+                      allOk
+                        ? 'bg-[color:var(--color-accent)] text-white'
+                        : 'bg-white text-[color:var(--color-muted)] ring-1 ring-[color:var(--color-border-strong)]'
+                    }`}
+                  >
+                    {s.step_number}
+                  </span>
+                  <span className="text-[color:var(--color-fg)]">{s.title}</span>
                 </span>
-                <span className="text-[color:var(--color-fg)]">{s.title_fr}</span>
-              </span>
-              <span className="flex items-center gap-1">
-                <ProgressDot ok={keyframesOk} label="frames" />
-                <ProgressDot ok={animOk} label="anim" />
-                <ProgressDot ok={narrOk} label="voice" />
-              </span>
+                <span className="flex items-center gap-1">
+                  <ProgressDot ok={keyframesOk} label="frames" />
+                  <ProgressDot ok={animOk} label="anim" />
+                  <ProgressDot ok={narrOk} label="voice" />
+                </span>
+              </div>
+              {hasCoaching ? (
+                <div className="flex flex-col gap-0.5 pl-7 text-[11px] leading-snug">
+                  {s.safety_note ? (
+                    <p className="text-[color:var(--color-warn)]">⚠ {s.safety_note}</p>
+                  ) : null}
+                  {s.success_criteria ? (
+                    <p className="text-[color:var(--color-muted)]">
+                      ✓ Done when: {s.success_criteria}
+                    </p>
+                  ) : null}
+                  {s.common_mistake ? (
+                    <p className="text-[color:var(--color-muted)]">✗ Avoid: {s.common_mistake}</p>
+                  ) : null}
+                </div>
+              ) : null}
             </li>
           );
         })}

@@ -28,13 +28,14 @@ if (!apiKey) {
 
 fal.config({ credentials: apiKey });
 
-const mime = {
-  '.png': 'image/png',
-  '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
-  '.webp': 'image/webp',
-  '.gif': 'image/gif',
-}[extname(arg).toLowerCase()] ?? 'application/octet-stream';
+const mime =
+  {
+    '.png': 'image/png',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.webp': 'image/webp',
+    '.gif': 'image/gif',
+  }[extname(arg).toLowerCase()] ?? 'application/octet-stream';
 
 const buf = readFileSync(arg);
 const file = new File([buf], basename(arg), { type: mime });

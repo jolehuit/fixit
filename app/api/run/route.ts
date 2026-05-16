@@ -44,15 +44,15 @@ function logRepairPlan(jobId: string, plan: RepairPlan): void {
     '',
     sep,
     `[plan] job=${jobId}`,
-    `  summary    : ${plan.problem_summary_fr}`,
+    `  summary    : ${plan.problem_summary}`,
     `  difficulty : ${plan.difficulty}`,
     `  duration   : ~${plan.total_duration_min} min`,
     `  steps      : ${plan.steps.length}`,
     sep,
   ];
   for (const s of plan.steps) {
-    lines.push(`Step ${s.step_number} — ${s.title_fr} (${s.duration_seconds}s)`);
-    lines.push(`  description : ${s.description_fr}`);
+    lines.push(`Step ${s.step_number} — ${s.title} (${s.duration_seconds}s)`);
+    lines.push(`  description : ${s.description}`);
     if (s.parts_needed.length) {
       lines.push(`  parts       : ${s.parts_needed.join(', ')}`);
     }
@@ -62,7 +62,7 @@ function logRepairPlan(jobId: string, plan: RepairPlan): void {
     lines.push(`  visual.start: ${s.visual_prompt_start}`);
     lines.push(`  visual.end  : ${s.visual_prompt_end}`);
     lines.push(`  motion      : ${s.motion_prompt}`);
-    lines.push(`  narration   : ${s.narration_fr}`);
+    lines.push(`  narration   : ${s.narration}`);
     lines.push('');
   }
   lines.push(sep);
@@ -113,7 +113,7 @@ export async function POST(req: Request) {
 
   void runLive(jobId, {
     photo_url: parsed.data.photo_url,
-    transcript_fr: parsed.data.transcript_fr,
+    transcript: parsed.data.transcript,
   });
   return NextResponse.json(RunResponse.parse({ job_id: jobId, cached: false }));
 }
@@ -144,7 +144,7 @@ async function classifyPhoto(photoUrl: string): Promise<DemoId | 'none' | null> 
 
 // ---------- Live path ----------
 
-async function runLive(jobId: string, input: { photo_url: string; transcript_fr?: string }) {
+async function runLive(jobId: string, input: { photo_url: string; transcript?: string }) {
   // Helper: POST to an internal route and return parsed JSON.
   // Throws a descriptive error on non-2xx so the catch block surfaces it.
   async function post<T>(path: string, body: unknown): Promise<T> {
@@ -179,7 +179,7 @@ async function runLive(jobId: string, input: { photo_url: string; transcript_fr?
 
     const analyzeResult = await post<AnalyzeResult>('/api/analyze', {
       photo_url: input.photo_url,
-      transcript_fr: input.transcript_fr,
+      transcript: input.transcript,
     });
 
     emit(jobId, { type: 'analyze_done', result: analyzeResult });
@@ -269,7 +269,7 @@ async function runLive(jobId: string, input: { photo_url: string; transcript_fr?
           quality,
           image_size: 'landscape_16_9',
           scene_lock: repairPlan.scene_lock,
-          subject_focus_fr: step.subject_focus_fr,
+          subject_focus: step.subject_focus,
           shot_type: step.shot_type,
         },
       );
@@ -287,7 +287,7 @@ async function runLive(jobId: string, input: { photo_url: string; transcript_fr?
           quality,
           image_size: 'landscape_16_9',
           scene_lock: repairPlan.scene_lock,
-          subject_focus_fr: step.subject_focus_fr,
+          subject_focus: step.subject_focus,
           shot_type: step.shot_type,
         },
       );
@@ -308,7 +308,7 @@ async function runLive(jobId: string, input: { photo_url: string; transcript_fr?
         }),
         post<{ step_number: number; url: string; duration_seconds: number }>('/api/narrate', {
           step_number: i,
-          text_fr: step.narration_fr,
+          text: step.narration,
           job_id: jobId,
         }),
       ]);
@@ -321,7 +321,7 @@ async function runLive(jobId: string, input: { photo_url: string; transcript_fr?
         video_url: anim.url,
         audio_url: narr.url,
         // Prefer the short subtitle when provided; fallback to full narration.
-        subtitle_fr: step.subtitle_fr ?? step.narration_fr,
+        subtitle: step.subtitle ?? step.narration,
       };
     }
 
@@ -351,7 +351,7 @@ async function runLive(jobId: string, input: { photo_url: string; transcript_fr?
 
     const finalVideo = await post<{ url: string; duration_seconds: number }>('/api/stitch', {
       clips,
-      intro_text_fr: repairPlan.problem_summary_fr,
+      intro_text: repairPlan.problem_summary,
     });
 
     emit(jobId, { type: 'stitch_done', video_url: finalVideo.url });

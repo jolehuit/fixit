@@ -122,13 +122,13 @@ function splitSubtitle(text: string): string[] {
  * Each clip occupies [cumStart, cumStart + duration). Its subtitle lines are
  * evenly distributed across that window.
  */
-function buildSrt(clips: { subtitle_fr: string }[], durations: number[]): string {
+function buildSrt(clips: { subtitle: string }[], durations: number[]): string {
   const out: string[] = [];
   let cueIdx = 1;
   let cum = 0;
   for (let i = 0; i < clips.length; i++) {
     const dur = durations[i];
-    const lines = splitSubtitle(clips[i].subtitle_fr);
+    const lines = splitSubtitle(clips[i].subtitle);
     if (lines.length === 0) {
       cum += dur;
       continue;

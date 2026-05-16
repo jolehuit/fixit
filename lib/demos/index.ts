@@ -30,7 +30,7 @@ export type DemoMeta = {
   /** Public URL (for <img src> previews) */
   photo_url: string;
   /** Pre-recorded FR voice transcript fed into /api/analyze */
-  transcript_fr: string;
+  transcript: string;
   // ---- UI labels (English) ----
   title: string;
   short: string;
@@ -48,7 +48,7 @@ export const demos: Record<DemoId, DemoMeta> = {
     emoji: '🚲',
     photo_path: 'demos/flat-tire/bike.png',
     photo_url: '/demos/flat-tire/bike.png',
-    transcript_fr:
+    transcript:
       "J'ai crevé en allant bosser et je veux pas appeler un pro, je suis sûr que je peux le faire moi-même.",
     title: 'Fix a flat bike tire',
     short: 'Flat bike tire',
@@ -64,8 +64,7 @@ export const demos: Record<DemoId, DemoMeta> = {
     emoji: '📱',
     photo_path: 'demos/cracked-screen/phone.png',
     photo_url: '/demos/cracked-screen/phone.png',
-    transcript_fr:
-      'Mon écran est fissuré, est-ce que je peux le réparer moi-même ou il faut un pro ?',
+    transcript: 'Mon écran est fissuré, est-ce que je peux le réparer moi-même ou il faut un pro ?',
     title: 'Diagnose a cracked iPhone screen',
     short: 'Cracked phone screen',
     intro:
@@ -81,7 +80,7 @@ export const demos: Record<DemoId, DemoMeta> = {
     emoji: '🚰',
     photo_path: 'demos/dripping-faucet/Fuite.png',
     photo_url: '/demos/dripping-faucet/Fuite.png',
-    transcript_fr: "Mon robinet fuit à la base, c'est urgent, je veux pas appeler un plombier.",
+    transcript: "Mon robinet fuit à la base, c'est urgent, je veux pas appeler un plombier.",
     title: 'Fix a dripping faucet',
     short: 'Dripping faucet',
     intro:

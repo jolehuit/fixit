@@ -59,7 +59,7 @@ export default function DemoIntroPage({ params }: { params: Promise<{ id: string
         // to the cached replay (when the cache env vars are configured).
         body: JSON.stringify({
           photo_url: dataUrl,
-          transcript_fr: demo.transcript_fr,
+          transcript: demo.transcript,
           demo_id: demoId,
         }),
       });

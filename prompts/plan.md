@@ -3,7 +3,7 @@
 **Owner:** Role B
 **Strategy (iteration 5):** two parallel Tavily search+extract pipelines feed a single GPT-5.5 `generateObject` synthesis call. The two stages target different signal types (model spec vs repair procedure) — combined they give the LLM much richer grounding than a single pass.
 
-**Output language:** ENGLISH in every text field, including the legacy `_fr` keys (schema in `lib/types.ts` is frozen; content language is decoupled).
+**Output language:** ENGLISH in every text field, including the legacy `` keys (schema in `lib/types.ts` is frozen; content language is decoupled).
 
 ## Architecture
 
@@ -49,21 +49,21 @@ PlanRequest { analyze, answers? }
 ## Synthesis system prompt (canonical — embedded as a constant)
 
 Required outputs per step:
-- `title_fr` ≤6 words EN
-- `description_fr` 1–2 sentences EN, naming the sub-component acted upon
+- `title` ≤6 words EN
+- `description` 1–2 sentences EN, naming the sub-component acted upon
 - `parts_needed`, `tools_needed`: short EN strings; use specific P/Ns or dimensions when the research context provides them
 - `duration_seconds`: integer 30–600
 - `visual_prompt_start` / `visual_prompt_end`: ≤25 words EN; mention brand/model from input, hands, tools, sub-component
 - `motion_prompt`: ≤1 EN sentence describing the start→end delta
-- `narration_fr`: 50–80 words EN, second-person ("you"), pace matches `duration_seconds`. Use the research context's specificity (torques, screw types, washer orientation) wherever available.
+- `narration`: 50–80 words EN, second-person ("you"), pace matches `duration_seconds`. Use the research context's specificity (torques, screw types, washer orientation) wherever available.
 
-Top-level: `problem_summary_fr` ≤15 words EN (restate the defect + location), `difficulty`, `total_duration_min`.
+Top-level: `problem_summary` ≤15 words EN (restate the defect + location), `difficulty`, `total_duration_min`.
 
 Grounding rules:
 - Prefer the research context for procedure, parts, tools.
 - Use confirmed model/dimensions explicitly in titles, narration, prompts.
 - Don't invent torques, voltages, or part numbers not supported by context or general knowledge.
-- Surface safety warnings from the research context inside `narration_fr` when relevant.
+- Surface safety warnings from the research context inside `narration` when relevant.
 
 ## Failure modes & fallbacks
 
@@ -84,6 +84,6 @@ Well under Vercel Pro's 300s default for non-`stitch`/`run` routes.
 
 ## Notes for Role B
 
-- Per-step `narration_fr` content is ENGLISH. Role C will swap `GRADIUM_TTS_VOICE_ID` to an English voice in their `.env` (1-line change, out of Role B scope).
+- Per-step `narration` content is ENGLISH. Role C will swap `GRADIUM_TTS_VOICE_ID` to an English voice in their `.env` (1-line change, out of Role B scope).
 - The synthesis prompt consumes the slotted analyze strings as-is — no parsing logic needed. The LLM understands the slot format natively.
 - If a specific repair (e.g. iPhone) consistently produces overly generic plans, tighten the prompt by adding 1 worked example in the system message. We keep the prompt example-free for now to save tokens; revisit if quality drops.

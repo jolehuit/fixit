@@ -37,13 +37,13 @@ export type RepairFeasibility = z.infer<typeof RepairFeasibility>;
 
 export const Uncertainty = z.object({
   field: z.string(),
-  question_fr: z.string(),
+  question: z.string(),
   /** Why we ask — shown as tooltip / subtitle in the clarify UI. */
-  purpose_fr: z.string().optional(),
+  purpose: z.string().optional(),
   /** Where / how the user finds the answer in the physical world. */
-  instruction_fr: z.string().optional(),
+  instruction: z.string().optional(),
   /** Placeholder for the free-text input when no exact match in options. */
-  placeholder_fr: z.string().optional(),
+  placeholder: z.string().optional(),
   options: z.array(z.string()).max(5).optional(),
 });
 export type Uncertainty = z.infer<typeof Uncertainty>;
@@ -65,9 +65,9 @@ export const AnalyzeResult = z.object({
   /** DIY recommendation: home_easy = anyone, home_advanced = some experience, professional = call a pro. */
   repair_feasibility: RepairFeasibility.optional(),
   /** One-liner ≤10 words describing the skill bar. */
-  estimated_skill_level_fr: z.string().optional(),
+  estimated_skill_level: z.string().optional(),
   /** Up to 4 safety warnings the user should know before starting. */
-  safety_warnings_fr: z.array(z.string()).max(4).optional(),
+  safety_warnings: z.array(z.string()).max(4).optional(),
   uncertainties: z.array(Uncertainty),
   /** Where to draw the pulsing marker on the photo. Optional for back-compat. */
   defect_marker: DefectMarker.optional(),
@@ -118,7 +118,7 @@ export const SceneLock = z.object({
   environment: z.string(),
   hands_style: z.string(),
   style: z.string(),
-  color_palette_fr: z.string(),
+  color_palette: z.string(),
   shot_default: ShotType,
   camera_default: CameraMovement,
   /** Phrases injected verbatim into every GPT Image 2 prompt (consistency anchors). */
@@ -131,21 +131,24 @@ export type SceneLock = z.infer<typeof SceneLock>;
 export const RepairPartSummary = z.object({
   name: z.string(),
   quantity: z.number().int().positive(),
-  specification_fr: z.string().optional(),
+  specification: z.string().optional(),
+  /** Direct buy URL (Amazon, manufacturer, retailer). If omitted, the UI
+   * auto-generates an Amazon France search link from name + specification. */
+  purchase_url: z.string().url().optional(),
 });
 export type RepairPartSummary = z.infer<typeof RepairPartSummary>;
 
 export const RepairToolSummary = z.object({
   name: z.string(),
   required: z.boolean(),
-  specification_fr: z.string().optional(),
+  specification: z.string().optional(),
 });
 export type RepairToolSummary = z.infer<typeof RepairToolSummary>;
 
 export const RepairStep = z.object({
   step_number: z.number().int().positive(),
-  title_fr: z.string(),
-  description_fr: z.string(),
+  title: z.string(),
+  description: z.string(),
   parts_needed: z.array(z.string()),
   tools_needed: z.array(z.string()),
   duration_seconds: z.number().positive(),
@@ -156,7 +159,7 @@ export const RepairStep = z.object({
   /** How intense the hands/tools motion should feel. */
   motion_pacing: MotionPacing.optional(),
   /** What the keyframe should anchor on — fed verbatim to GPT Image 2. */
-  subject_focus_fr: z.string().optional(),
+  subject_focus: z.string().optional(),
   /** Prompt for the START keyframe via gpt-image-2/edit */
   visual_prompt_start: z.string(),
   /** Prompt for the END keyframe via gpt-image-2/edit */
@@ -164,20 +167,20 @@ export const RepairStep = z.object({
   /** Motion prompt fed to Seedance image-to-video */
   motion_prompt: z.string(),
   /** Narration text (50–80 words) fed to Gradium TTS */
-  narration_fr: z.string(),
+  narration: z.string(),
   /** ≤8 words burned-in subtitle (1 line), summary of the narration. */
-  subtitle_fr: z.string().optional(),
+  subtitle: z.string().optional(),
   /** Specific safety warning for THIS step (battery short, sharp edges…). */
-  safety_note_fr: z.string().optional(),
+  safety_note: z.string().optional(),
   /** How the user verifies the step succeeded. */
-  success_criteria_fr: z.string().optional(),
+  success_criteria: z.string().optional(),
   /** Common mistake / failure mode to avoid. */
-  common_mistake_fr: z.string().optional(),
+  common_mistake: z.string().optional(),
 });
 export type RepairStep = z.infer<typeof RepairStep>;
 
 export const RepairPlan = z.object({
-  problem_summary_fr: z.string(),
+  problem_summary: z.string(),
   difficulty: Difficulty,
   total_duration_min: z.number().positive(),
   /** Parts cost range in € — pieces only, no labour. */
@@ -188,7 +191,7 @@ export const RepairPlan = z.object({
     })
     .optional(),
   /** Global safety warnings BEFORE starting (power off, eye protection…). */
-  safety_pre_check_fr: z.array(z.string()).max(4).optional(),
+  safety_pre_check: z.array(z.string()).max(4).optional(),
   /** Consolidated parts list across all steps. */
   parts_summary: z.array(RepairPartSummary).optional(),
   /** Consolidated tools list across all steps. */
@@ -232,7 +235,7 @@ export type FinalVideo = z.infer<typeof FinalVideo>;
 
 export const AnalyzeRequest = z.object({
   photo_url: z.string().url(),
-  transcript_fr: z.string().optional(),
+  transcript: z.string().optional(),
 });
 export type AnalyzeRequest = z.infer<typeof AnalyzeRequest>;
 
@@ -260,7 +263,7 @@ export const RenderKeyframeRequest = z.object({
   /** Scene-wide constants from the plan — injected into the GPT Image 2 prompt for consistency. */
   scene_lock: SceneLock.optional(),
   /** What this keyframe should anchor on (e.g. "the lower-left pentalobe screw"). */
-  subject_focus_fr: z.string().optional(),
+  subject_focus: z.string().optional(),
   /** Camera framing for this step (override of scene_lock.shot_default). */
   shot_type: ShotType.optional(),
 });
@@ -286,7 +289,7 @@ export type AnimateStepRequest = z.infer<typeof AnimateStepRequest>;
 
 export const NarrateRequest = z.object({
   step_number: z.number().int().positive(),
-  text_fr: z.string().min(1),
+  text: z.string().min(1),
   voice_id: z.string().optional(),
   job_id: z.string().optional(),
 });
@@ -296,13 +299,13 @@ export const StitchClip = z.object({
   step_number: z.number().int().positive(),
   video_url: z.string().url(),
   audio_url: z.string().url(),
-  subtitle_fr: z.string(),
+  subtitle: z.string(),
 });
 export type StitchClip = z.infer<typeof StitchClip>;
 
 export const StitchRequest = z.object({
   clips: z.array(StitchClip).min(1),
-  intro_text_fr: z.string().optional(),
+  intro_text: z.string().optional(),
 });
 export type StitchRequest = z.infer<typeof StitchRequest>;
 
@@ -314,7 +317,7 @@ export type StitchRequest = z.infer<typeof StitchRequest>;
  */
 export const RunRequest = z.object({
   photo_url: z.string().url(),
-  transcript_fr: z.string().optional(),
+  transcript: z.string().optional(),
   demo_id: DemoId.optional(),
 });
 export type RunRequest = z.infer<typeof RunRequest>;

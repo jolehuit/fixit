@@ -13,7 +13,7 @@
  */
 
 import { NextResponse } from 'next/server';
-import { fal, FAL_IMAGE_EDIT_ENDPOINT } from '@/lib/fal';
+import { FAL_IMAGE_EDIT_ENDPOINT, fal } from '@/lib/fal';
 import { Keyframe, RenderKeyframeRequest, type SceneLock, type ShotType } from '@/lib/types';
 
 export const runtime = 'nodejs';
@@ -30,7 +30,7 @@ export const runtime = 'nodejs';
 function wrapWithSceneLock(
   prompt: string,
   scene_lock: SceneLock | undefined,
-  subject_focus_fr: string | undefined,
+  subject_focus: string | undefined,
   shot_type: ShotType | undefined,
 ): string {
   if (!scene_lock) return prompt;
@@ -40,11 +40,11 @@ function wrapWithSceneLock(
   parts.push(`Shot: ${finalShot}, ${scene_lock.style}.`);
   parts.push(`Environment: ${scene_lock.environment}.`);
   parts.push(`Hands: ${scene_lock.hands_style}.`);
-  parts.push(`Color palette: ${scene_lock.color_palette_fr}.`);
-  if (subject_focus_fr) parts.push(`Focus on: ${subject_focus_fr}.`);
+  parts.push(`Color palette: ${scene_lock.color_palette}.`);
+  if (subject_focus) parts.push(`Focus on: ${subject_focus}.`);
   parts.push(`Scene action: ${prompt}.`);
   if (scene_lock.consistency_phrases.length > 0) {
-    parts.push(scene_lock.consistency_phrases.map((p) => p.replace(/\.$/, '')).join('; ') + '.');
+    parts.push(`${scene_lock.consistency_phrases.map((p) => p.replace(/\.$/, '')).join('; ')}.`);
   }
   if (scene_lock.negative_cues.length > 0) {
     parts.push(`Avoid: ${scene_lock.negative_cues.join(', ')}.`);
@@ -96,14 +96,14 @@ export async function POST(req: Request) {
     quality,
     image_size,
     scene_lock,
-    subject_focus_fr,
+    subject_focus,
     shot_type,
   } = parsed.data;
 
   // Multi-image reference: include prev keyframe when present for step continuity.
   const image_urls = prev_keyframe_url ? [reference_url, prev_keyframe_url] : [reference_url];
 
-  const finalPrompt = wrapWithSceneLock(prompt, scene_lock, subject_focus_fr, shot_type);
+  const finalPrompt = wrapWithSceneLock(prompt, scene_lock, subject_focus, shot_type);
 
   const input = {
     prompt: finalPrompt,
@@ -128,10 +128,7 @@ export async function POST(req: Request) {
       result = await callFal();
     } catch (secondErr) {
       console.error('[render-keyframe] fal retry failed', secondErr);
-      return NextResponse.json(
-        { error: 'fal_failed', detail: String(secondErr) },
-        { status: 502 },
-      );
+      return NextResponse.json({ error: 'fal_failed', detail: String(secondErr) }, { status: 502 });
     }
   }
 

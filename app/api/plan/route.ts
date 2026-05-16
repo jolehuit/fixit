@@ -20,9 +20,9 @@
  *   Synthesis: GPT-5.5 generateObject(schema=RepairPlan) produces:
  *     - factual fields (titles, descriptions, parts, tools, durations)
  *     - generative fields Role C consumes (visual_prompt_start/end,
- *       motion_prompt, narration_fr) — ALL in English content.
+ *       motion_prompt, narration) — ALL in English content.
  *
- * Output language: ENGLISH in every text field (legacy "_fr" suffixes
+ * Output language: ENGLISH in every text field (legacy "" suffixes
  * are kept by contract; content is decoupled from field name).
  */
 
@@ -78,13 +78,13 @@ Your job: produce a COMPLETE RepairPlan JSON that another team will use to gener
 
 ═════ TOP-LEVEL FIELDS ═════
 
-- "problem_summary_fr": ≤15 words English, restates defect + precise location.
+- "problem_summary": ≤15 words English, restates defect + precise location.
 - "difficulty": easy | medium | hard.
 - "total_duration_min": integer, ceil(sum(duration_seconds) / 60).
 - "estimated_cost_eur" (OPTIONAL): { parts_low, parts_high } in €, pieces only (no labour).
-- "safety_pre_check_fr" (OPTIONAL, recommended): 0–4 GLOBAL warnings BEFORE starting (e.g. "Power off and unplug", "Shut off water under the sink", "Wear safety glasses").
-- "parts_summary" (OPTIONAL, recommended): consolidated list across all steps. Each entry: { name, quantity, specification_fr? } where specification_fr ≤10 words (e.g. "matching ETRTO size, Presta valve").
-- "tools_summary" (OPTIONAL, recommended): consolidated list. Each entry: { name, required, specification_fr? }. required:false for nice-to-have tools (heat gun, magnetic mat).
+- "safety_pre_check" (OPTIONAL, recommended): 0–4 GLOBAL warnings BEFORE starting (e.g. "Power off and unplug", "Shut off water under the sink", "Wear safety glasses").
+- "parts_summary" (OPTIONAL, recommended): consolidated list across all steps. Each entry: { name, quantity, specification?, purchase_url? } where specification ≤10 words (e.g. "matching ETRTO size, Presta valve"). For purchase_url, only include a DIRECT product URL if you are confident it exists (manufacturer page, well-known retailer); otherwise omit it and the UI auto-generates an Amazon search link from name + specification.
+- "tools_summary" (OPTIONAL, recommended): consolidated list. Each entry: { name, required, specification? }. required:false for nice-to-have tools (heat gun, magnetic mat).
 
 ═════ scene_lock (OPTIONAL but STRONGLY recommended) ═════
 
@@ -93,7 +93,7 @@ Single object constraining EVERY step's visual generation. Same wording across k
 - "environment": ≤20 words. Decor + light source (e.g. "clean grey workbench, soft natural daylight from upper-left, anti-static mat").
 - "hands_style": ≤20 words (e.g. "one or two adult hands, light skin tone, no rings or watches, plain dark sleeves").
 - "style": ≤20 words (e.g. "tutorial macro photography, shallow depth of field, photorealistic, 16:9 landscape").
-- "color_palette_fr": ≤15 words English describing the palette to preserve.
+- "color_palette": ≤15 words English describing the palette to preserve.
 - "shot_default": "wide" | "medium" | "close-up" | "macro" (recommended baseline: "macro" for repair tutorials).
 - "camera_default": "static" | "subtle_pan_left" | "subtle_pan_right" | "subtle_zoom_in" | "subtle_zoom_out" (recommended: "static" — motion comes from hands, not camera).
 - "consistency_phrases": 4–8 English phrases injected verbatim into every keyframe prompt. Pull from this proven list (Seedance + GPT Image 2 best practices):
@@ -124,36 +124,36 @@ Single object constraining EVERY step's visual generation. Same wording across k
 
 REQUIRED:
 - "step_number": int, sequential from 1.
-- "title_fr": ≤6 words English.
-- "description_fr": 1–2 short sentences English. Mention the specific sub-component this step acts on.
+- "title": ≤6 words English.
+- "description": 1–2 short sentences English. Mention the specific sub-component this step acts on.
 - "parts_needed": list, each ≤3 words. Empty array if none.
 - "tools_needed": list, each ≤3 words. Empty array if none.
 - "duration_seconds": int 30–600, realistic.
 - "visual_prompt_start" AND "visual_prompt_end": both ≤25 English words. Describe the SAME exact scene (same camera, framing, distance, lens, lighting). The ONLY difference is the action's state (hand position, tool position, sub-component before vs after). Use identical framing language across the pair. Never introduce/remove objects between start and end.
 - "motion_prompt": ≤1 English sentence, action in present tense ("you turn", "you slide"). The downstream video model is told separately to keep the camera and scene fixed.
-- "narration_fr": 50–80 words English, second-person ("you"), pace matches duration_seconds.
+- "narration": 50–80 words English, second-person ("you"), pace matches duration_seconds.
 
 OPTIONAL but RECOMMENDED:
 - "shot_type": override of scene_lock.shot_default. Keep the SAME on 80%+ of steps for visual continuity.
 - "camera_movement": override of scene_lock.camera_default. Quasi-always "static" for repair tutorials.
 - "motion_pacing": "slow_methodical" | "controlled" | "deliberate". Controls how gentle the Seedance interpolation should feel.
-- "subject_focus_fr": ≤10 words English naming the visual anchor of this step (e.g. "the lower-left pentalobe screw beside the Lightning port"). Fed verbatim to GPT Image 2 to keep keyframes focused.
-- "subtitle_fr": ≤8 words English, 1-line burned-in subtitle, short version of narration.
-- "safety_note_fr": ≤15 words English, specific danger for THIS step (e.g. "Battery short-circuit risk — disconnect first").
-- "success_criteria_fr": ≤20 words English, how the user verifies the step worked (e.g. "Pipe end clean, washer compresses evenly when re-tightened").
-- "common_mistake_fr": ≤20 words English (e.g. "Pressing the driver at an angle strips the pentalobe head").
+- "subject_focus": ≤10 words English naming the visual anchor of this step (e.g. "the lower-left pentalobe screw beside the Lightning port"). Fed verbatim to GPT Image 2 to keep keyframes focused.
+- "subtitle": ≤8 words English, 1-line burned-in subtitle, short version of narration.
+- "safety_note": ≤15 words English, specific danger for THIS step (e.g. "Battery short-circuit risk — disconnect first").
+- "success_criteria": ≤20 words English, how the user verifies the step worked (e.g. "Pipe end clean, washer compresses evenly when re-tightened").
+- "common_mistake": ≤20 words English (e.g. "Pressing the driver at an angle strips the pentalobe head").
 
 ═════ GROUNDING ═════
 
 - Prefer the research context for procedure, parts, tools, torques.
 - Use confirmed model/dimension from clarification answers explicitly in titles, narration, and visual prompts.
 - Do not invent torques, voltages, or part numbers not supported by context or general repair knowledge.
-- Safety: if the research context warns about a step (battery, gas, mains), include the warning in narration_fr AND in safety_note_fr.
+- Safety: if the research context warns about a step (battery, gas, mains), include the warning in narration AND in safety_note.
 
 ═════ STRICT OUTPUT ═════
 
 - JSON matches the RepairPlan schema. No extra top-level fields.
-- All text content in ENGLISH regardless of legacy "_fr" field naming.`;
+- All text content in ENGLISH regardless of legacy "" field naming.`;
 
 function buildModelIdQuery(object: string, answersJson: string | null): string {
   const base = `Identify exact product model and compatible spare parts: ${object}`;
@@ -313,9 +313,72 @@ export async function POST(req: Request) {
     });
 
     const safe = RepairPlan.parse(result.object);
+
+    // Enrich parts_summary entries with real purchase URLs via Tavily.
+    // Non-fatal: any Tavily failure leaves the URL unset, the UI falls back
+    // to an Amazon France search link client-side.
+    if (safe.parts_summary && safe.parts_summary.length > 0) {
+      await enrichPartsWithPurchaseUrls(safe);
+    }
+
     return NextResponse.json(safe);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'plan failed';
     return NextResponse.json({ error: 'plan_failed', message }, { status: 500 });
   }
 }
+
+/**
+ * Tavily-search ONLY the primary part (parts_summary[0]) to find a real
+ * product URL. We deliberately enrich just one part — the actual replacement
+ * piece (inner tube, display assembly, slip washer…) — and not consumables
+ * or accessories. By convention the LLM lists the primary part first.
+ *
+ * Non-fatal: any Tavily failure leaves purchase_url unset, the UI hides the
+ * Buy button entirely for that part.
+ */
+async function enrichPartsWithPurchaseUrls(plan: RepairPlan): Promise<void> {
+  if (!plan.parts_summary || plan.parts_summary.length === 0) return;
+  const primary = plan.parts_summary[0];
+  if (primary.purchase_url) return; // LLM already gave us a URL — keep it
+
+  const query = [primary.name, primary.specification, 'buy product']
+    .filter(Boolean)
+    .join(' ')
+    .trim();
+  if (!query) return;
+
+  try {
+    const tvly = tavilyClient();
+    const res = await tvly.search(query, {
+      searchDepth: 'basic',
+      maxResults: 3,
+      includeDomains: PURCHASE_DOMAINS,
+    });
+    const top = (res.results ?? [])
+      .filter((r) => r.url && r.url.startsWith('http'))
+      .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))[0];
+    if (top?.url) {
+      plan.parts_summary[0] = { ...primary, purchase_url: top.url };
+    }
+  } catch {
+    // Swallow — UI hides the Buy button if no URL.
+  }
+}
+
+const PURCHASE_DOMAINS = [
+  'amazon.fr',
+  'amazon.com',
+  'ifixit.com',
+  'manomano.fr',
+  'leroymerlin.fr',
+  'castorama.fr',
+  'decathlon.com',
+  'decathlon.fr',
+  'spareka.fr',
+  'darty.com',
+  'fnac.com',
+  'homedepot.com',
+  'lowes.com',
+  'walmart.com',
+];

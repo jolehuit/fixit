@@ -2,7 +2,7 @@
 
 **Owner:** Role B
 **Model:** `gpt-5.5` via AI SDK 5 `generateObject`
-**Output language:** ENGLISH in every text field, including `_fr`-suffixed names (legacy schema, content language decoupled).
+**Output language:** ENGLISH in every text field, including ``-suffixed names (legacy schema, content language decoupled).
 **Goal:** make this route the **single source of truth** for everything downstream (clarify, plan, video generation). Output must be specific, structured, and verifiable from the photo.
 
 ## 4-phase prompt (canonical — embedded as a constant in `app/api/analyze/route.ts`)
@@ -21,7 +21,7 @@ The model reasons through 4 phases silently and emits only the final JSON.
    ```
 4. **SPARE-PARTS UNCERTAINTIES.** Up to 3 entries. For each:
    - `field` is a snake_case key (downstream lookup).
-   - `question_fr` MUST follow the format: `"<short direct English question> (— used to <one-line purpose>)"`. The purpose clause is mandatory; it is what clarify will polish and what the UI can show as helper text.
+   - `question` MUST follow the format: `"<short direct English question> (— used to <one-line purpose>)"`. The purpose clause is mandatory; it is what clarify will polish and what the UI can show as helper text.
    - `options`: include 1–3 strings (≤3 words each) only when ≤3 candidates are realistically enumerable. Otherwise omit — the UI renders a free-text input.
 
 ## Useful uncertainty fields (non-exhaustive, fit to the object)
@@ -31,7 +31,7 @@ The model reasons through 4 phases silently and emits only the final JSON.
 ## User prompt template
 
 ```
-User's voice description (may be in French): "{transcript_fr}"   (or "No voice description provided.")
+User's voice description (may be in French): "{transcript}"   (or "No voice description provided.")
 
 Analyze the photo per the 3-phase system instructions. Read every visible
 label and marking, identify the object as precisely as possible for

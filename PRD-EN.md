@@ -151,26 +151,26 @@ export const AnalyzeResult = z.object({
   problem_visual: z.string(),
   uncertainties: z.array(z.object({
     field: z.string(),
-    question_fr: z.string(),
+    question: z.string(),
     options: z.array(z.string()).max(3).optional(),
   })),
 });
 
 export const RepairStep = z.object({
   step_number: z.number(),
-  title_fr: z.string(),
-  description_fr: z.string(),
+  title: z.string(),
+  description: z.string(),
   parts_needed: z.array(z.string()),
   tools_needed: z.array(z.string()),
   duration_seconds: z.number(),
   visual_prompt_start: z.string(),  // for GPT Image 2 start keyframe
   visual_prompt_end: z.string(),    // for GPT Image 2 end keyframe
   motion_prompt: z.string(),        // for Seedance
-  narration_fr: z.string(),         // for Gradium TTS
+  narration: z.string(),         // for Gradium TTS
 });
 
 export const RepairPlan = z.object({
-  problem_summary_fr: z.string(),
+  problem_summary: z.string(),
   difficulty: z.enum(['easy', 'medium', 'hard']),
   total_duration_min: z.number(),
   steps: z.array(RepairStep).min(2).max(8),
@@ -317,7 +317,7 @@ Owns the three routes that turn raw user input into a structured `RepairPlan`. E
 
 - Implement `/api/analyze`: GPT-5.5 Vision via Responses API → returns `AnalyzeResult` with object identification + uncertainty detection
 - Implement `/api/clarify`: takes uncertainties, generates 1–3 visual options or a free-text fallback question
-- Implement `/api/plan`: calls Tavily `/research` with `output_schema`, returns a fully-populated `RepairPlan` including `visual_prompt_start`, `visual_prompt_end`, `motion_prompt`, `narration_fr` per step
+- Implement `/api/plan`: calls Tavily `/research` with `output_schema`, returns a fully-populated `RepairPlan` including `visual_prompt_start`, `visual_prompt_end`, `motion_prompt`, `narration` per step
 - If Tavily `/research` underperforms on French queries, layer GPT-5.5 on top to restructure `/search` + `/extract` outputs
 - Iterate prompts until the 3 demo input photos produce sensible `RepairPlan` JSON
 - Hand off polished plans for the 3 demos as JSON files for the cache (consumed by Role D)
