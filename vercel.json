@@ -3,7 +3,7 @@
   "fluid": true,
   "functions": {
     "app/api/stitch/route.ts": {
-      "memory": 3009,
+      "memory": 2048,
       "maxDuration": 300
     },
     "app/api/run/route.ts": {
