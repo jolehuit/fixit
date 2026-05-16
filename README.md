@@ -21,6 +21,42 @@ Paris AI Hackathon · Open Innovation track gives full topic freedom + at least 
 
 The orchestrator (`/api/run`) emits the whole story as Server-Sent Events on `/api/stream/[jobId]` so the front-end shows each phase landing in real time. There is no fake "Loading…" — the user sees `analyze_done` → `clarify_needed` → `plan_done` → `keyframe_done` ×N → `animation_done` ×N → `narration_done` ×N → `stitch_done`.
 
+## Architecture overview
+
+```mermaid
+flowchart TD
+    User([User photo])
+    User --> Run
+
+    Run["POST /api/run<br/>orchestrator"]
+
+    Run --> Classify["/api/classify-photo<br/>OpenAI vision (triage)"]
+    Classify -->|match + cache configured| Cached["Cached replay<br/>analyze.json + plan.json + mp4<br/>from Vercel Blob"]
+    Classify -->|no match / cache empty| Live
+
+    subgraph Live["Live pipeline"]
+        direction TB
+        Analyze["/api/analyze<br/>OpenAI GPT-5.5 vision<br/>→ object + defect + marker"]
+        Clarify["/api/clarify ↔ user<br/>OpenAI reasoning<br/>→ 1–2 questions (pause ≤ 45 s)"]
+        Plan["/api/plan<br/>OpenAI + Tavily research<br/>→ N repair steps"]
+        StepLoop["For each step (parallel after #1):<br/>• /api/render-keyframe ×2 — fal gpt-image-2/edit<br/>• /api/animate-step — fal seedance-2.0<br/>• /api/narrate — Gradium TTS"]
+        Stitch["/api/stitch<br/>ffmpeg concat + SRT burn"]
+        Analyze --> Clarify --> Plan --> StepLoop --> Stitch
+    end
+
+    Stitch --> Blob[(Vercel Blob<br/>WAV + MP4)]
+    Cached --> Result
+    Blob --> Result([Final video URL])
+
+    Run -.->|SSE events| Stream
+    Analyze -.-> Stream
+    Clarify -.-> Stream
+    Plan -.-> Stream
+    StepLoop -.-> Stream
+    Stitch -.-> Stream
+    Stream["/api/stream/jobId<br/>Server-Sent Events"] -.->|LiveProgress| User
+```
+
 ## Live pipeline
 
 When the user uploads (or clicks a demo card) the orchestrator runs:
