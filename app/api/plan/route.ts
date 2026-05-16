@@ -74,7 +74,7 @@ const SYSTEM_PROMPT = `You are a repair-procedure synthesizer. You receive:
 - Optional clarification answers from the user (model number, year, dimensions…).
 - Raw research context: spec-sheet content (Stage 1) AND repair-guide content (Stage 2), concatenated with source URLs.
 
-Your job: produce a COMPLETE RepairPlan JSON that another team will use to generate a video. Every field is mandatory. Steps must be ordered, 5 to 7 of them, each filmable in roughly 4–8 seconds.
+Your job: produce a COMPLETE RepairPlan JSON that another team will use to generate a video. Every field is mandatory. Steps must be ordered, 2 to 10 of them, each filmable in roughly 4–8 seconds.
 
 For EACH step:
 - "title_fr": ≤6 words, English (legacy field name, content English).
