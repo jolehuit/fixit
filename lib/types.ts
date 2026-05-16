@@ -136,6 +136,8 @@ export const PlanRequest = z.object({
 export type PlanRequest = z.infer<typeof PlanRequest>;
 
 export const RenderKeyframeRequest = z.object({
+  step_number: z.number().int().positive(),
+  kind: KeyframeKind,
   reference_url: z.string().url(),
   prompt: z.string(),
   prev_keyframe_url: z.string().url().optional(),
@@ -145,13 +147,12 @@ export const RenderKeyframeRequest = z.object({
 export type RenderKeyframeRequest = z.infer<typeof RenderKeyframeRequest>;
 
 export const AnimateStepRequest = z.object({
+  step_number: z.number().int().positive(),
   start_frame_url: z.string().url(),
   end_frame_url: z.string().url(),
   motion_prompt: z.string(),
   duration_seconds: z
     .union([
-      z.literal(2),
-      z.literal(3),
       z.literal(4),
       z.literal(5),
       z.literal(6),
@@ -159,13 +160,15 @@ export const AnimateStepRequest = z.object({
       z.literal(8),
     ])
     .default(5),
-  resolution: z.enum(['480p', '720p', '1080p']).default('720p'),
+  resolution: z.enum(['480p', '720p']).default('720p'),
 });
 export type AnimateStepRequest = z.infer<typeof AnimateStepRequest>;
 
 export const NarrateRequest = z.object({
+  step_number: z.number().int().positive(),
   text_fr: z.string().min(1),
   voice_id: z.string().optional(),
+  job_id: z.string().optional(),
 });
 export type NarrateRequest = z.infer<typeof NarrateRequest>;
 

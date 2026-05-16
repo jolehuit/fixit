@@ -1,0 +1,29 @@
+{
+  "title": "Cracked phone screen — DIY first response",
+  "steps": [
+    {
+      "visual_prompt_start": "The same cracked phone screen as the reference image, lying flat on a clean white workbench under bright neutral lighting, captured head-on.",
+      "visual_prompt_end": "Same cracked phone on the same workbench, a fingertip enters from the right side of the frame and points precisely at the longest crack line on the screen.",
+      "motion_prompt": "A fingertip slowly enters from the right and points at the longest crack on the phone screen, no other motion.",
+      "narration": "Start by inspecting the damage. Identify the longest cracks and gently tap different zones to check whether the touch layer underneath is still responsive.",
+      "subtitle": "Inspect cracks and check touch response.",
+      "duration_seconds": 5
+    },
+    {
+      "visual_prompt_start": "Same cracked phone on the same workbench, thumb hovering just above the right-side power button of the phone, the screen still showing the cracks but is on.",
+      "visual_prompt_end": "Same cracked phone with the 'slide to power off' interface displayed across the screen, the slider visible behind the cracks.",
+      "motion_prompt": "A thumb presses and holds the side power button of the cracked phone, the screen content transitions to show the slide-to-power-off interface.",
+      "narration": "Power down the phone before attempting any repair. Hold the side button until the power slider appears, then slide right to fully shut it off.",
+      "subtitle": "Power the phone off before any repair.",
+      "duration_seconds": 5
+    },
+    {
+      "visual_prompt_start": "Same powered-off cracked phone on the workbench, a small green suction cup with a handle placed next to the bottom edge of the phone, both clearly visible.",
+      "visual_prompt_end": "Same cracked phone with the green suction cup now firmly attached to the bottom-center of the cracked screen, two fingers gripping the suction cup handle ready to pull.",
+      "motion_prompt": "Two hands pick up the green suction cup, press it firmly against the bottom edge of the cracked phone screen, then grip the handle preparing to pull upward.",
+      "narration": "Attach a small suction cup near the bottom edge. Press it down firmly to create a tight seal, then pull straight up to gently lift the broken screen panel.",
+      "subtitle": "Suction cup at the bottom edge to lift the screen.",
+      "duration_seconds": 5
+    }
+  ]
+}

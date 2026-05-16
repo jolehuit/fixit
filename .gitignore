@@ -50,3 +50,6 @@ next-env.d.ts
 # Generated demo binaries (heavy; commit only the ones we ship)
 # public/demos/**/input.png
 # public/demos/**/output.mp4
+
+# Local Blob dev fallback (lib/blob.ts uploadLocal)
+public/_local-blob/
