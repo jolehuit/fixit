@@ -94,7 +94,7 @@ function ChooserView({ onPick }: { onPick: (m: Mode) => void }) {
         <ChooserCard
           onClick={() => onPick('demo')}
           title="Try a sample"
-          subtitle="3 guided demos — flat tire, cracked screen, dripping faucet."
+          subtitle="2 guided demos — flat tire and cracked screen."
           icon={<DemoIcon />}
           tone="secondary"
           cta="Browse demos"
@@ -203,9 +203,11 @@ function DemoView() {
         </p>
       </div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {demoList.map((demo) => (
-          <DemoCard key={demo.id} demo={demo} />
-        ))}
+        {demoList
+          .filter((demo) => demo.id !== 'dripping-faucet')
+          .map((demo) => (
+            <DemoCard key={demo.id} demo={demo} />
+          ))}
       </div>
     </section>
   );
