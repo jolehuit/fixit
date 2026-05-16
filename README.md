@@ -1,8 +1,8 @@
-# Fixit — AI Repair Assistant
+# Fixit · AI Repair Assistant
 
 **Paris AI Hackathon 2026 · Open Innovation track · fal side challenge**
 
-From a photo of a broken object to a personalized step-by-step repair video in ~60–120 s. Analyze, clarify, plan, render, animate, narrate, stitch — all live, end-to-end.
+From a photo of a broken object to a personalized step-by-step repair video in ~60-120 s. Analyze, clarify, plan, render, animate, narrate, stitch: all live, end-to-end.
 
 Snap the broken thing. The orchestrator decides what's broken, asks one or two clarifying questions, plans the procedure with web-grounded research, generates a per-step start/end keyframe of the user's *own* photo, animates the in-between, narrates in French, and stitches a captioned 720p MP4 with background music.
 
@@ -13,7 +13,7 @@ Snap the broken thing. The orchestrator decides what's broken, asks one or two c
 | **fal** *(side challenge entry)* | `render-keyframe` (`openai/gpt-image-2/edit`), `animate-step` (`bytedance/seedance-2.0/image-to-video`) | Two fal models chained per repair step. Image edit transforms the user's actual photo into "step start" then "step end" frames. Image-to-video animates the in-between, conditioned on a planner-emitted motion prompt. |
 | OpenAI (GPT-5.5) | `analyze`, `clarify`, `clarify-resolve`, `classify-photo`, `plan` | Vision-grade structured analysis (object, defect, marker coordinates, uncertainties). Reasoning over the answers. Multi-step planning with a duration budget. |
 | Gradium | `narrate` | French TTS per step (voice `YTpq7expH9539ERJ`, `eu` region). WAV duration probed from the header so `stitch` can align subtitles. |
-| Tavily | `plan` (research stage) | Grounds the plan in the actual repair web — bike tube sizes, iPhone display assemblies, faucet trap diameters. |
+| Tavily | `plan` (research stage) | Grounds the plan in the actual repair web: bike tube sizes, iPhone display assemblies, faucet trap diameters. |
 
 ## Architecture
 
@@ -33,7 +33,7 @@ flowchart TD
         Analyze["/api/analyze<br/>OpenAI GPT-5.5 vision<br/>→ object + defect + marker"]
         Clarify["/api/clarify ↔ user<br/>OpenAI reasoning<br/>→ 1–2 questions"]
         Plan["/api/plan<br/>OpenAI + Tavily research<br/>→ N repair steps"]
-        StepLoop["For each step (parallel after #1):<br/>• /api/render-keyframe ×2 — fal gpt-image-2/edit<br/>• /api/animate-step — fal seedance-2.0<br/>• /api/narrate — Gradium TTS"]
+        StepLoop["For each step (parallel after #1):<br/>• /api/render-keyframe ×2 · fal gpt-image-2/edit<br/>• /api/animate-step · fal seedance-2.0<br/>• /api/narrate · Gradium TTS"]
         Stitch["/api/stitch<br/>ffmpeg concat + SRT burn"]
         Analyze --> Clarify --> Plan --> StepLoop --> Stitch
     end
@@ -118,12 +118,12 @@ Three pre-shot photos drive the no-friction demo flow. Each runs the **same live
 
 ## Submission
 
-- Public repo with README + setup — ✅
-- ≥ 1 partner technology — uses **4** (OpenAI, **fal**, Gradium, Tavily)
+- Public repo with README + setup: ✅
+- ≥ 1 partner technology: uses **4** (OpenAI, **fal**, Gradium, Tavily)
 - Newly created at the hackathon
 - Team of 4
-- **Side challenge: fal** — two fal models (`gpt-image-2/edit` + `seedance-2.0`) chained per repair step, edits of the user's actual photo, not synthetic scenes
-- 2-min Loom demo — submitted via the project form
+- **Side challenge: fal** · two fal models (`gpt-image-2/edit` + `seedance-2.0`) chained per repair step, edits of the user's actual photo, not synthetic scenes
+- 2-min Loom demo · submitted via the project form
 
 ## Scripts
 
