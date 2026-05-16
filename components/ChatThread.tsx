@@ -36,9 +36,8 @@ export function ChatThread({
   const phaseRef = useRef<'asking' | 'preparing' | 'done'>('asking');
   const onVideoReadyRef = useRef(onVideoReady);
   onVideoReadyRef.current = onVideoReady;
-  // Persistent flags so React StrictMode (which runs effects twice in dev)
-  // can't kick off two parallel scripts and produce duplicate messages.
-  const scriptStartedRef = useRef(false);
+  // Persistent across the component lifetime — survives React StrictMode's
+  // double-invoke in dev so we don't fire the "Almost there…" cue twice.
   const saidAlmostRef = useRef(false);
 
   // ---- SSE ingestion (silent, only watches for plan + final video) ----
@@ -73,10 +72,6 @@ export function ChatThread({
 
   // ---- Conversation script ----
   useEffect(() => {
-    // Guard against double-run in React StrictMode (dev).
-    if (scriptStartedRef.current) return;
-    scriptStartedRef.current = true;
-
     let cancelled = false;
     const nextId = () => ++idRef.current;
     const labels = demoLabels[demoId];
